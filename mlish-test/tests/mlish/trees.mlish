@@ -1,0 +1,8 @@
+#lang mlish
+(require rackunit/turnstile)
+
+(define-type (Tree X)
+  (Leaf X)
+  (Node (Tree X) X (Tree X)))
+
+(provide-type Tree Leaf Node)
