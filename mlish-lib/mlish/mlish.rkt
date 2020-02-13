@@ -8,28 +8,28 @@
  (for-meta 2 racket/base))
 
 (extends
- "ext-stlc.rkt"
- #:except → define #%app λ #%datum begin
+ turnstile/examples/ext-stlc
+ #:except → define #%app λ #%datum
           + - * void = zero? sub1 add1 not let let* and
  #:rename [~→ ~ext-stlc:→])
-(reuse inst #:from "sysf.rkt")
-(require (only-in "ext-stlc.rkt" → →?))
-(require (only-in "sysf.rkt" ~∀ ∀ ∀? mk-∀- Λ))
-(reuse × tup proj define-type-alias #:from "stlc+rec-iso.rkt")
-(require (only-in "stlc+rec-iso.rkt" ~× ×?))
+(reuse inst #:from turnstile/examples/sysf)
+(require (only-in turnstile/examples/ext-stlc → →?))
+(require (only-in turnstile/examples/sysf ~∀ ∀ ∀? mk-∀- Λ))
+(reuse × tup proj define-type-alias #:from turnstile/examples/stlc+rec-iso)
+(require (only-in turnstile/examples/stlc+rec-iso ~× ×?))
 (provide (rename-out [ext-stlc:and and] [ext-stlc:#%datum #%datum] [tc-top #%top])
          only-in)
 (reuse member length reverse list-ref cons nil isnil head tail list
-       #:from "stlc+cons.rkt")
-(require (prefix-in stlc+cons: (only-in "stlc+cons.rkt" list cons nil)))
-(require (only-in "stlc+cons.rkt" ~List List? List mk-List-))
-(reuse ref deref := Ref #:from "stlc+box.rkt")
-(require (rename-in (only-in "stlc+reco+var.rkt" tup proj × mk-×-)
+       #:from turnstile/examples/stlc+cons)
+(require (prefix-in stlc+cons: (only-in turnstile/examples/stlc+cons list cons nil)))
+(require (only-in turnstile/examples/stlc+cons ~List List? List mk-List-))
+(reuse ref deref := Ref #:from turnstile/examples/stlc+box)
+(require (rename-in (only-in turnstile/examples/stlc+reco+var tup proj × mk-×-)
            [tup rec] [proj get] [× ××]))
 (provide rec get ××)
 ;; for pattern matching
-(require (prefix-in stlc+cons: (only-in "stlc+cons.rkt" list)))
-(require (prefix-in stlc+tup: (only-in "stlc+tup.rkt" tup)))
+(require (prefix-in stlc+cons: (only-in turnstile/examples/stlc+cons list)))
+(require (prefix-in stlc+tup: (only-in turnstile/examples/stlc+tup tup)))
 
 ;; ML-like language
 ;; - top level recursive functions
@@ -39,7 +39,7 @@
 
 (provide define-type define-types
          (for-syntax make-extra-info-transformer)
-         → →/test ?∀ (for-syntax ~?∀)
+         → →/test ?∀ (for-syntax ~?∀ →? (rename-out [~ext-stlc:→ ~→]))
          (typed-out/unsafe [+ : (→ Int Int Int)]
                     [- : (→ Int Int Int)]
                     [* : (→ Int Int Int)]
@@ -116,7 +116,7 @@
          for for*
          for/list for/vector for*/vector for*/list for/fold for/hash for/sum
          printf format
-         let let* begin
+         let let*
          Hash hash hash-ref
          String-Port Input-Port
          write-string string-length string-copy!
@@ -421,7 +421,7 @@
    #:when (brace? #'Ys)
    ;; TODO; remove this code duplication
    #:with f- (add-orig (generate-temporary #'f) #'f)
-   #:with e_ann #'(add-expected e τ_out)
+   #:with e_ann (syntax/loc #'e (add-expected e τ_out))
    #:with (τ+orig ...) (stx-map (λ (t) (add-orig t t)) #'(τ ... τ_out))
    #:with (~and ty_fn_expected (~?∀ _ (~ext-stlc:→ _ ... out_expected)))
           (set-stx-prop/preserved
@@ -1008,14 +1008,14 @@
                test)
           b ... body] ...+) ⇐ τ_expected ≫
    [⊢ test ≫ test- ⇐ Bool] ...
-   [⊢ (begin b ... body) ≫ body- ⇐ τ_expected] ...
+   [⊢ (ext-stlc:begin b ... body) ≫ body- ⇐ τ_expected] ...
    --------
    [⊢ (cond- [test- body-] ...)]]
   [(_ [(~or (~and (~datum else) (~parse test #'(ext-stlc:#%datum . #t)))
                test)
           b ... body] ...+) ≫
    [⊢ test ≫ test- ⇐ Bool] ...
-   [⊢ (begin b ... body) ≫ body- ⇒ τ_body] ...
+   [⊢ (ext-stlc:begin b ... body) ≫ body- ⇒ τ_body] ...
    --------
    [⊢ (cond- [test- body-] ...) ⇒ (⊔ τ_body ...)]])
 (define-typed-syntax (when test body ...) ≫
@@ -1217,23 +1217,11 @@
        ⇒ : ty.norm]]
   [(let ([x:id e] ...) body ...) ≫
    --------
-   [≻ (ext-stlc:let ([x e] ...) (begin body ...))]])
+   [≻ (ext-stlc:let ([x e] ...) (ext-stlc:begin body ...))]])
 (define-typed-syntax let*
   [(let* ([x:id e] ...) body ...) ≫
    --------
-   [≻ (ext-stlc:let* ([x e] ...) (begin body ...))]])
-
-(define-typed-syntax begin
-  [(begin body ... b) ⇐ : τ_expected ≫
-   [⊢ [body ≫ body- ⇒ : _] ...]
-   [⊢ [b ≫ b- ⇐ : τ_expected]]
-   --------
-   [⊢ (begin- body- ... b-)]]
-  [(begin body ... b) ≫
-   [⊢ [body ≫ body- ⇒ : _] ...]
-   [⊢ [b ≫ b- ⇒ : τ]]
-   --------
-   [⊢ (begin- body- ... b-) ⇒ : τ]])
+   [≻ (ext-stlc:let* ([x e] ...) (ext-stlc:begin body ...))]])
 
 ;; hash
 (define-type-constructor Hash #:arity = 2)

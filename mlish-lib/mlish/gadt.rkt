@@ -1,5 +1,5 @@
 #lang turnstile/base
-(require (only-in "ext-stlc.rkt" [→ ext-stlc:→] ⊔)
+(require (only-in turnstile/examples/ext-stlc [→ ext-stlc:→] ⊔)
          (only-in "mlish.rkt" ?∀ make-extra-info-transformer Bool)
          (for-syntax racket/set racket/string macrotypes/type-constraints))
 

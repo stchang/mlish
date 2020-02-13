@@ -1,6 +1,7 @@
 # mlish [![Build Status](https://travis-ci.org/stchang/mlish.svg?branch=master)](https://travis-ci.org/stchang/mlish)
 
-An experimental, extensible language in the OCaml family.
+An experimental, extensible language inspired by languages like SML
+and OCaml.
 
 Extensions are type-aware which means that "extensible" includes the
 type system. In other words, new type system features may be

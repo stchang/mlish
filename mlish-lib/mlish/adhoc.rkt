@@ -5,20 +5,24 @@
 (provide define-typeclass
          define-instance
          (rename-out [liftedλ λ]
-                     [mlish:#%app #%app]
+                     [adhoc:#%app #%app]
                      [define/tc define])
          inst
          → →/test
          => =>/test)
 
 (require (postfix-in - racket/flonum)
-         (for-syntax macrotypes/type-constraints racket/set racket/string)
-         (for-meta 2 racket/base syntax/parse racket/syntax))
-
-(require (only-in "ext-stlc.rkt" →? [~→ ~ext-stlc:→] [→ ext-stlc:→]
-                  [#%app ext-stlc:#%app] [λ ext-stlc:λ] [begin ext-stlc:begin]))
-(require (only-in "sysf.rkt" ~∀ ∀ ∀? mk-∀- Λ [inst sysf:inst]))
-(require (only-in "mlish.rkt" ~?∀ Int Bool String Char Float))
+         (for-syntax racket/set racket/string macrotypes/type-constraints)
+         (for-meta 2 racket/base syntax/parse racket/syntax)
+ (only-in turnstile/examples/ext-stlc
+          [#%app ext-stlc:#%app] [λ ext-stlc:λ] [begin ext-stlc:begin])
+ (only-in turnstile/examples/sysf
+          ~∀ ∀ ∀? mk-∀- Λ)
+ (only-in "mlish.rkt"
+          →? [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app]
+          [define mlish:define]
+          [inst mlish:inst]
+          ~?∀ Int Bool String Char Float))
 
 
 (define-type-constructor => #:arity > 0)
@@ -189,56 +193,7 @@
 ;; - since the order of the inferred type variables depends on expansion order,
 ;;   which is not known to programmers, to make the result slightly more
 ;;   intuitive, we arbitrarily sort the inferred tyvars lexicographically
-(define-typed-syntax define/tc; #:export-as define
-  [(_ x:id e) ≫
-   [⊢ e ≫ e- ⇒ τ]
-   #:with x- (generate-temporary)
-   --------
-   [≻ (begin-
-        (define-typed-variable-rename x ≫ x- : τ)
-        (define- x- e-))]]
-  ; explicit "forall"
-  [(_ Ys (f:id [x:id (~datum :) τ] ... (~or (~datum ->) (~datum →)) τ_out) 
-      e_body ... e) ≫
-   #:when (brace? #'Ys)
-   ;; TODO; remove this code duplication
-   #:with f- (add-orig (generate-temporary #'f) #'f)
-   #:with e_ann (syntax/loc #'e (add-expected e τ_out))
-   #:with (τ+orig ...) (stx-map (λ (t) (add-orig t t)) #'(τ ... τ_out))
-   ;; TODO: check that specified return type is correct
-   ;; - currently cannot do it here; to do the check here, need all types of
-   ;;  top-lvl fns, since they can call each other
-   #:with (~and ty_fn_expected (~∀ _ (~ext-stlc:→ _ ... out_expected))) 
-          ((current-type-eval) #'(∀ Ys (ext-stlc:→ τ+orig ...)))
-   --------
-   [≻ (begin-
-        (define-typed-variable-rename f ≫ f- : ty_fn_expected)
-        (define- f-
-          (Λ Ys (ext-stlc:λ ([x : τ] ...) (ext-stlc:begin e_body ... e_ann)))))]]
-  ;; alternate type sig syntax, after parameter names
-  [(_ (f:id x:id ...) (~datum :) ty ... (~or (~datum ->) (~datum →)) ty_out . b) ≫
-   --------
-   [≻ (define/tc (f [x : ty] ... -> ty_out) . b)]]
-  [(_ (f:id [x:id (~datum :) τ] ... ; no TC
-            (~or (~datum ->) (~datum →)) τ_out)
-      e_body ... e) ≫
-   #:with (~and Ys (Y ...)) (compute-tyvars #'(τ ... τ_out))
-   #:with f- (add-orig (generate-temporary #'f) #'f)
-   #:with e_ann (syntax/loc #'e (add-expected e τ_out)) ; must be macro bc t_out may have unbound tvs
-   #:with (τ+orig ...) (stx-map (λ (t) (add-orig t t)) #'(τ ... τ_out))
-   ;; TODO: check that specified return type is correct
-   ;; - currently cannot do it here; to do the check here, need all types of
-   ;;  top-lvl fns, since they can call each other
-   #:with ty_fn_expected
-          (set-stx-prop/preserved 
-           ((current-type-eval) #'(∀ Ys (ext-stlc:→ τ+orig ...)))
-           'orig
-           (list #'(→ τ+orig ...)))
-   --------
-   [≻ (begin-
-        (define-typed-variable-rename f ≫ f- : ty_fn_expected)
-        (define- f-
-          (Λ Ys (ext-stlc:λ ([x : τ] ...) (ext-stlc:begin e_body ... e_ann)))))]]
+(define-typed-syntax define/tc
   [(_ (f:id [x:id (~datum :) τ] ... 
             (~seq #:where TC ...)
             (~or (~datum ->) (~datum →)) τ_out)
@@ -250,9 +205,9 @@
    ;; TODO: check that specified return type is correct
    ;; - currently cannot do it here; to do the check here, need all types of
    ;;  top-lvl fns, since they can call each other
-   #:with (~and ty_fn_expected (~∀ _ (~=> _ ... (~ext-stlc:→ _ ... out_expected))))
+   #:with (~and ty_fn_expected (~∀ _ (~=> _ ... (~mlish:→ _ ... out_expected))))
           (syntax-property 
-              ((current-type-eval) #'(∀ Ys (=> TC ... (ext-stlc:→ τ+orig ...))))
+              ((current-type-eval) #'(∀ Ys (=> TC ... (mlish:→ τ+orig ...))))
             'orig
             (list #'(→ τ+orig ...)))
    --------
@@ -262,19 +217,20 @@
             (define- f-
               ;(Λ Ys (ext-stlc:λ ([x : τ] ...) (ext-stlc:begin e_body ... e_ann)))))])
               (liftedλ {Y ...} ([x : τ] ... #:where TC ...) 
-                       #,(syntax/loc #'e_ann (ext-stlc:begin e_body ... e_ann))))))]])
+                       #,(syntax/loc #'e_ann (ext-stlc:begin e_body ... e_ann))))))]]
+  [(_ . rst) ≫ --- [≻ (mlish:define . rst)]])
 
 (define-syntax → ; wrapping →
   (syntax-parser
     [(_ ty ... #:TC TC ...)
-     #'(∀ () (=> TC ... (ext-stlc:→ ty ...)))]
+     #'(∀ () (=> TC ... (mlish:→ ty ...)))]
     [(_ Xs . rst)
      #:when (brace? #'Xs)
      #:with (X ...) #'Xs
      (syntax-property 
-       #'(∀ (X ...)  (ext-stlc:→ . rst))
+       #'(∀ (X ...)  (mlish:→ . rst))
        'orig (list #'(→ . rst)))]
-    [(_ . rst) (set-stx-prop/preserved #'(∀ () (ext-stlc:→ . rst)) 'orig (list #'(→ . rst)))]))
+    [(_ . rst) (set-stx-prop/preserved #'(∀ () (mlish:→ . rst)) 'orig (list #'(→ . rst)))]))
 
 ; special arrow that computes free vars; for use with tests
 ; (because we can't write explicit forall)
@@ -282,16 +238,16 @@
   (syntax-parser
     [(_ (~and Xs (X:id ...)) . rst)
      #:when (brace? #'Xs)
-     #'(∀ (X ...) (ext-stlc:→ . rst))]
+     #'(∀ (X ...) (mlish:→ . rst))]
     [(_ . rst)
      #:with Xs (compute-tyvars #'rst)
-     #'(∀ Xs (ext-stlc:→ . rst))]))
+     #'(∀ Xs (mlish:→ . rst))]))
 
 (define-syntax =>/test 
   (syntax-parser
     [(_ . (~and rst (TC ... (_arr . tys_arr))))
      #:with Xs (compute-tyvars #'rst)
-     #'(∀ Xs (=> TC ... (ext-stlc:→ . tys_arr)))]))
+     #'(∀ Xs (=> TC ... (mlish:→ . tys_arr)))]))
 
 ; redefine these to use lifted →
 (provide (typed-out/unsafe
@@ -333,7 +289,7 @@
    [≻ (Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : ty] ...) body)))]]
   [(_ ([x:id (~datum :) ty] ...) body) ≫ ; no TC
    #:with (X ...) (compute-tyvars #'(ty ...))
-   #:with (~∀ () (~ext-stlc:→ _ ... body-ty)) (get-expected-type this-syntax)
+   #:with (~∀ () (~mlish:→ _ ... body-ty)) (get-expected-type this-syntax)
    --------
    [≻ (Λ (X ...) (ext-stlc:λ ([x : ty] ...) (add-expected body body-ty)))]]
   [(_ ([x:id (~datum :) ty] ...) body) ≫ ; no TC, ignoring expected-type
@@ -344,7 +300,7 @@
    #:with (~?∀ Xs expected) (get-expected-type this-syntax)
    #:do [(unless (→? #'expected)
            (type-error #:src this-syntax #:msg "λ parameters must have type annotations"))]
-   #:with (~ext-stlc:→ arg-ty ... body-ty) #'expected
+   #:with (~mlish:→ arg-ty ... body-ty) #'expected
    #:do [(unless (stx-length=? #'[x ...] #'[arg-ty ...])
            (type-error #:src this-syntax #:msg
                        (format "expected a function of ~a arguments, got one with ~a arguments"
@@ -352,7 +308,7 @@
    --------
    [≻ (Λ Xs (ext-stlc:λ ([x : arg-ty] ...) #,(add-expected-type #'body #'body-ty)))]]
   #;[(_ args body)
-   #:with (~∀ () (~ext-stlc:→ arg-ty ... body-ty)) (get-expected-type stx)
+   #:with (~∀ () (~mlish:→ arg-ty ... body-ty)) (get-expected-type stx)
    #`(Λ () (ext-stlc:λ args #,(add-expected-type #'body #'body-ty)))]
   #;[(_ (~and x+tys ([_ (~datum :) ty] ...)) . body)
    #:with Xs (compute-tyvars #'(ty ...))
@@ -360,74 +316,31 @@
    #'(Λ Xs (ext-stlc:λ x+tys . body))])
 
 ;; #%app --------------------------------------------------
-(define-typed-syntax mlish:#%app; #:export-as #%app
+(define-typed-syntax adhoc:#%app
   [(~and this-app (_ e_fn . e_args)) ≫
 ;   #:when (printf "app: ~a\n" (syntax->datum #'(e_fn . e_args)))
    ;; ) compute fn type (ie ∀ and →) 
-   [⊢ e_fn ≫ e_fn- ⇒ (~and ty_fn (~∀ Xs ty_fnX))]
+   [⊢ e_fn ≫ e_fn- ⇒ (~and ty_fn (~?∀ Xs ty_fnX))]
    --------
    [≻ 
     #,(cond 
        [(stx-null? #'Xs)
         (define/with-syntax tyX_args
           (syntax-parse #'ty_fnX
-            [(~ext-stlc:→ . tyX_args) #'tyX_args]))
+            [(~mlish:→ . tyX_args) #'tyX_args]))
         (syntax-parse #'(e_args tyX_args)
           [((e_arg ...) (τ_inX ... _))
            #:fail-unless (stx-length=? #'(e_arg ...) #'(τ_inX ...))
            (mk-app-err-msg #'this-app #:expected #'(τ_inX ...) 
                            #:note "Wrong number of arguments.")
-           #:with e_fn/ty (assign-type #'e_fn- #'(ext-stlc:→ . tyX_args))
+           #:with e_fn/ty (assign-type #'e_fn- #'(mlish:→ . tyX_args))
            #'(ext-stlc:#%app e_fn/ty (add-expected e_arg τ_inX) ...)])]
        [else
      (syntax-parse #'ty_fnX
-      ;; TODO: combine these two clauses
-      ;; no typeclasses, duplicate code for now --------------------------------
-      [(~ext-stlc:→ . tyX_args) 
-       ;; ) solve for type variables Xs
-       (define/with-syntax ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args #'this-app))
-       ;; ) instantiate polymorphic function type
-       (syntax-parse (inst-types/cs #'Xs #'cs #'tyX_args)
-        [(τ_in ... τ_out) ; concrete types
-         ;; ) arity check
-         #:fail-unless (stx-length=? #'(τ_in ...) #'e_args)
-                       (mk-app-err-msg #'this-app #:expected #'(τ_in ...)
-                        #:note "Wrong number of arguments.")
-          #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
-         ;; ) compute argument types; re-use args expanded during solve
-         #:with ([e_arg2- τ_arg2] ...) (let ([n (stx-length #'(e_arg1- ...))])
-                                        (infers+erase 
-                                        (stx-map add-expected-type
-                                          (stx-drop #'e_args n) (stx-drop #'(τ_in ...) n))))
-         #:with (τ_arg1 ...) (stx-map typeof #'(e_arg1- ...))
-         #:with (τ_arg ...) #'(τ_arg1 ... τ_arg2 ...)
-         #:with (e_arg- ...) #'(e_arg1- ... e_arg2- ...)
-         ;; ) typecheck args
-         #:fail-unless (typechecks? #'(τ_arg ...) #'(τ_in ...))
-                       (mk-app-err-msg #'this-app
-                        #:given #'(τ_arg ...)
-                        #:expected 
-                        (stx-map 
-                          (lambda (tyin) 
-                            (define old-orig (get-orig tyin))
-                            (define new-orig
-                              (and old-orig
-                                   (substs 
-                                       (stx-map get-orig (lookup-Xs/keep-unsolved #'Xs #'cs)) #'Xs old-orig
-                                       (lambda (x y) 
-                                         (equal? (syntax->datum x) (syntax->datum y))))))
-                            (syntax-property tyin 'orig (list new-orig)))
-                          #'(τ_in ...)))
-         #:with τ_out* (if (stx-null? #'(unsolved-X ...))
-                           #'τ_out
-                           (syntax-parse #'τ_out
-                             [(~?∀ (Y ...) τ_out)
-                              (unless (→? #'τ_out)
-                                (raise-app-poly-infer-error #'this-app #'(τ_in ...) #'(τ_arg ...) #'e_fn))
-                              (mk-∀- #'(unsolved-X ... Y ...) #'(τ_out))]))
-         (assign-type #'(#%plain-app- e_fn- e_arg- ...) #'τ_out*)])]
+       ;; no typeclasses
+      [(~mlish:→ . tyX_args) #'(mlish:#%app e_fn . e_args)]
       ;; handle type class constraints ----------------------------------------
-      [(~=> TCX ... (~ext-stlc:→ . tyX_args))
+      [(~=> TCX ... (~mlish:→ . tyX_args))
        ;; ) solve for type variables Xs
        (define/with-syntax ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args #'this-app))
        ;; ) instantiate polymorphic function type
@@ -474,7 +387,7 @@
                        (stx-map (lambda (o) (format-id #'this-app "~a" o #:source #'this-app)) gen-ops)
                        (stx-map
                          (syntax-parser
-                           [(~∀ _ (~ext-stlc:→ ty_in ... _)) #'(ty_in ...)])
+                           [(~∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
                          conc-op-tys)))
                    #'((generic-op ...) ...) #'((ty-concrete-op ...) ...) #'(TC ...))
           ;; ) arity check
@@ -536,7 +449,7 @@
           [fl= : (→ Float Float Bool)]))
 
 (define-typed-syntax (inst e ty ...) ≫
-  [⊢ (sysf:inst e ty ...) ≫ e- ⇒ ty_e]
+  [⊢ (mlish:inst e ty ...) ≫ e- ⇒ ty_e]
   --------
   [⊢ e- ⇒ #,(cond
              [(→? #'ty_e) (mk-∀- #'() #'(ty_e))]
@@ -564,7 +477,7 @@
    [((~Any tycon ty-arg ...) ...) ≫
     ;; 1) look up concrete op corresponding to generic op and input tys
     [⊢ #,(mangle gen-op #'(tycon ...)) ≫ conc-op
-       ⇒ (~∀ Xs (~=> TC ... (~ext-stlc:→ . ty-args)))]
+       ⇒ (~∀ Xs (~=> TC ... (~mlish:→ . ty-args)))]
     ;; 2) compute sub-ops based on TC constraints
     ;;    (will include gen-op --- for smaller type)
     #:with (~TCs ([op _] ...) ...) #'(TC ...) ; order matters, must match order of arg types
@@ -577,7 +490,7 @@
                   #'((sub-op ...) ...)
                   (syntax->list #'((ty-arg ...) ...))))
        ;; 4) drop the TCs in result type, the proper subops are already applied
-       ⇒ (∀ Xs (ext-stlc:→ . ty-args))]] ; conc type, TCs dropped
+       ⇒ (∀ Xs (mlish:→ . ty-args))]] ; conc type, TCs dropped
    ;; base type --------------------------------------------------
    [(((~literal #%plain-app) ty-internal) ...) ≫
     [⊢ #,(mangle gen-op #'(ty-internal ...)) ≫ op- ⇒ t-]
@@ -599,9 +512,9 @@
     (stx-map get-type-tag ts))
   (define (get-fn-ty-in-tags ty-fn)
    (syntax-parse ty-fn
-     [(~∀ _ (~ext-stlc:→ ty_in ... _))
+     [(~∀ _ (~mlish:→ ty_in ... _))
       (get-type-tags #'(ty_in ...))]
-     [(~∀ _ (~=> _ ... (~ext-stlc:→ ty_in ... _)))
+     [(~∀ _ (~=> _ ... (~mlish:→ ty_in ... _)))
       (get-type-tags #'(ty_in ...))]))
  (define (TC-exists? TC #:ctx [ctx TC]) ; throws exn if fail
    (syntax-parse TC
