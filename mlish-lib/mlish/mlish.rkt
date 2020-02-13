@@ -1,40 +1,37 @@
 #lang turnstile/base
-(require
- (postfix-in - racket/fixnum)
- (postfix-in - racket/flonum)
- (postfix-in - racket/match)
- (for-syntax racket/set racket/string
-             macrotypes/type-constraints macrotypes/variance-constraints)
- (for-meta 2 racket/base))
 
-(extends turnstile/examples/ext-stlc #:except define #%app λ let)
-(reuse inst #:from turnstile/examples/sysf)
-(require (only-in turnstile/examples/sysf ~∀ ∀ ∀? mk-∀- Λ))
-(reuse × tup proj define-type-alias #:from turnstile/examples/stlc+rec-iso)
-(require (only-in turnstile/examples/stlc+rec-iso ~× ×?))
-(reuse member length reverse list-ref cons nil isnil head tail list
-       #:from turnstile/examples/stlc+cons)
-(require (prefix-in stlc+cons: (only-in turnstile/examples/stlc+cons list cons nil)))
-(require (only-in turnstile/examples/stlc+cons ~List List? List mk-List-))
-(reuse ref deref := Ref #:from turnstile/examples/stlc+box)
-(require (rename-in (only-in turnstile/examples/stlc+reco+var tup proj × mk-×-)
-           [tup rec] [proj get] [× ××]))
-(provide rec get ××)
-;; for pattern matching
-(require (prefix-in stlc+cons: (only-in turnstile/examples/stlc+cons list)))
-(require (prefix-in stlc+tup: (only-in turnstile/examples/stlc+tup tup)))
-
-;; ML-like language
+;; ML-like language, extends stlc core langs with:
 ;; - top level recursive functions
 ;; - user-definable algebraic datatypes
 ;; - pattern matching
 ;; - (local) type inference
 
-(provide define-type define-types
-         (for-syntax make-extra-info-transformer)
-         →/test ?∀ (for-syntax ~?∀)
-         (typed-out/unsafe 
-                    [max : (→ Int Int Int)]
+(extends turnstile/examples/ext-stlc #:except define #%app λ let)
+(reuse inst
+       #:from turnstile/examples/sysf)
+(reuse × tup proj define-type-alias
+       #:from turnstile/examples/stlc+rec-iso)
+(reuse Ref ref deref :=
+       #:from turnstile/examples/stlc+box)
+(reuse List member length reverse list-ref cons nil isnil head tail list
+       #:from turnstile/examples/stlc+cons)
+
+(provide
+ define match match2 λ define-type define-types let cond when unless set!
+ (rename-out [mlish:#%app #%app] [tc-top #%top])
+ Channel make-channel
+ Thread
+ Vector vector make-vector
+ Sequence in-range in-naturals in-lines
+ for for* for/list for/vector for*/vector for*/list for/fold for/hash for/sum
+ Hash hash hash-ref
+ (rename-out [tup rec] [proj get] [× ××]) ; from stlc+reco+var
+ String-Port Input-Port read write-string printf format
+ string-length string-copy! number->string string-append
+ quotient+remainder
+ provide-type (rename-out [mlish-provide provide]) require-typed only-in
+ Regexp
+ (typed-out/unsafe  [max : (→ Int Int Int)]
                     [min : (→ Int Int Int)]
                     [<= : (→ Int Int Bool)]
                     [>= : (→ Int Int Bool)]
@@ -46,7 +43,7 @@
                     [odd? : (→ Int Bool)]
                     [random : (→ Int Int)]
                     [integer->char : (→ Int Char)]
-                    [string->list : (→ String (List Char))]
+                    [string->list : (→ String (stlc+cons:List Char))]
                     [string->number : (→ String Int)]
                     [string : (→ Char String)]
                     [sleep : (→ Int Unit)]
@@ -76,7 +73,7 @@
                     [real->decimal-string : (→ Float Int String)]
                     [fx->fl : (→ Int Float)]
                     [quotient : (→ Int Int Int)]
-                    [regexp-match : (→ Regexp String (List String))]
+                    [regexp-match : (→ Regexp String (stlc+cons:List String))]
                     [regexp : (→ String Regexp)]
                     [channel-get : (∀ (X) (→ (Channel X) X))]
                     [channel-put : (∀ (X) (→ (Channel X) X Unit))]
@@ -86,42 +83,32 @@
                     [vector-set! : (∀ (X) (→ (Vector X) Int X Unit))]
                     [vector-copy! : (∀ (X) (→ (Vector X) Int (Vector X) Unit))]
                     [in-vector : (∀ (X) (→ (Vector X) (Sequence X)))]
-                    [in-list : (∀ (X) (→ (List X) (Sequence X)))]
+                    [in-list : (∀ (X) (→ (stlc+cons:List X) (Sequence X)))]
                     [display : (∀ (X) (→ X Unit))]
                     [displayln : (∀ (X) (→ X Unit))]
-                    [list->vector : (∀ (X) (→ (List X) (Vector X)))]
+                    [list->vector : (∀ (X) (→ (stlc+cons:List X) (Vector X)))]
                     [in-hash : (∀ (K V) (→ (Hash K V) (Sequence (stlc+rec-iso:× K V))))]
                     [hash-set! : (∀ (K V) (→ (Hash K V) K V Unit))]
                     [hash-has-key? : (∀ (K V) (→ (Hash K V) K Bool))]
                     [hash-count : (∀ (K V) (→ (Hash K V) Int))]
-                    [equal? : (∀ (X) (→ X X Bool))]
-                    )
-         define match match2 λ ?Λ
-         (rename-out [mlish:#%app #%app])
-         cond when unless
-         Channel make-channel
-         Thread
-         List Vector
-         vector make-vector
-         Sequence in-range in-naturals in-lines
-         for for*
-         for/list for/vector for*/vector for*/list for/fold for/hash for/sum
-         printf format
-         let
-         Hash hash hash-ref
-         String-Port Input-Port
-         write-string string-length string-copy!
-         number->string string-append
-         quotient+remainder
-         set!
-         provide-type 
-         (rename-out [mlish-provide provide] [tc-top #%top])
-         require-typed only-in
-         Regexp
-         read)
+                    [equal? : (∀ (X) (→ X X Bool))])
+ (for-syntax make-extra-info-transformer)
+ →/test ?Λ ?∀ (for-syntax ~?∀)
+ ;; to show user ability to extend the type system, see fasta.mlish
+ (for-syntax ~seq ...))
 
-;; for demonstrating user ability to extend the type system, see fasta.mlish
-(provide (for-syntax ~seq ...))
+(require
+ (postfix-in - racket/fixnum)
+ (postfix-in - racket/flonum)
+ (postfix-in - racket/match)
+ (for-syntax racket/set racket/string
+             macrotypes/type-constraints macrotypes/variance-constraints)
+ (for-meta 2 racket/base)
+
+ (only-in turnstile/examples/sysf ~∀ ∀ ∀? mk-∀- Λ)
+ (only-in turnstile/examples/stlc+rec-iso ~× ×?)
+ (only-in turnstile/examples/stlc+cons ~List List? mk-List-)
+ (only-in turnstile/examples/stlc+reco+var tup proj × mk-×-))
 
 ;; creating possibly polymorphic types
 ;; ?∀ only wraps a type in a forall if there's at least one type variable
@@ -643,7 +630,7 @@
        #:with (~× t ...) #'ty
        #:with (pp ...) #'(p1 p ...)
        (unifys #'([pp t] ...))]
-      [(((~literal stlc+tup:tup) p ...) ty) ; tup
+      [(((~literal stlc+rec-iso:tup) p ...) ty) ; tup
        #:with (~× t ...) #'ty
        (unifys #'([p t] ...))]
       [(((~literal stlc+cons:list) p ...) ty) ; known length list
@@ -705,7 +692,7 @@
       #:with (~× t ...) ty
       #:with (p- ...) (stx-map (lambda (p t) (compile-pat p t)) #'(p1 p ...) #'(t ...))
       #'(list p- ...)]
-     [((~literal stlc+tup:tup) . pats)
+     [((~literal stlc+rec-iso:tup) . pats)
       #:with (~× . tys) ty
       #:with (p- ...) (stx-map (lambda (p t) (compile-pat p t)) #'pats #'tys)
       (syntax/loc p (list p- ...))]
