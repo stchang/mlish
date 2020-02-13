@@ -272,88 +272,94 @@
    #:with ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args this-syntax)
    ;; ) instantiate polymorphic function type, to get concrete types
    #:with ((TC ...) (τ_in ... τ_out)) (inst-types/cs #'Xs #'cs #'((TCX ...) tyX_args))
-   ;; TODO: fix this indenting eventually
-          #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
-          #:with (~TCs ([generic-op ty-concrete-op] ...) ...) #'(TC ...)
-          #:with (op ...)
-                 (stx-appendmap
-                   (lambda (gen-ops conc-op-tys TC)
-                     (map 
-                       (lambda (o tys)
-                         (with-handlers 
-                           ([exn:fail:syntax:unbound? 
-                             (lambda (e)
-                               (type-error #:src this-syntax
-                                #:msg 
-                                (format 
-                                 (string-append
-                                     "~a instance undefined. "
-                                   "Cannot instantiate function with constraints "
-                                   "~a with:\n  ~a")
-                                 (type->str
-                                  (let* 
-                                   ([old-orig (get-orig TC)]
-                                    [new-orig
-                                     (and 
-                                      old-orig
-                                      (substs (stx-map get-orig (lookup-Xs/keep-unsolved #'Xs #'cs)) #'Xs old-orig
-                                              (lambda (x y) 
-                                               (equal? (syntax->datum x) 
-                                                       (syntax->datum y)))))])
-                                   (syntax-property TC 'orig (list new-orig))))
-                                 (types->str #'(TCX ...))
-                                 (string-join
-                                 (stx-map 
-                                   (lambda (X ty-solved)
-                                     (string-append (type->str X) " : " (type->str ty-solved)))
-                                   #'Xs (lookup-Xs/keep-unsolved #'Xs #'cs)) ", "))))]
-                            [(lambda _ #t)
-                             (lambda (e) (displayln "other exn")(displayln e)
-                             (error 'lookup))])
-                         (lookup-op o tys)))
-                       (stx-map (lambda (o) (format-id this-syntax "~a" o #:source this-syntax)) gen-ops)
-                       (stx-map
-                         (syntax-parser
-                           [(~?∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
-                         conc-op-tys)))
-                   #'((generic-op ...) ...) #'((ty-concrete-op ...) ...) #'(TC ...))
-          ;; ) arity check
-          #:fail-unless (stx-length=? #'(τ_in ...) #'e_args)
-                        (mk-app-err-msg this-syntax #:expected #'(τ_in ...)
-                                        #:note "Wrong number of arguments.")
-          ;; ) compute argument types; re-use args expanded during solve
-          #:with ([e_arg2- τ_arg2] ...) (let ([n (stx-length #'(e_arg1- ...))])
-                                          (infers+erase 
-                                              (stx-map add-expected-type
-                                                (stx-drop #'e_args n) (stx-drop #'(τ_in ...) n))))
-          #:with (τ_arg1 ...) (stx-map typeof #'(e_arg1- ...))
-          #:with (τ_arg ...) #'(τ_arg1 ... τ_arg2 ...)
-          #:with (e_arg- ...) #'(e_arg1- ... e_arg2- ...)
-          ;; ) typecheck args
-          #:fail-unless (typechecks? #'(τ_arg ...) #'(τ_in ...))
-                        (mk-app-err-msg this-syntax
-                         #:given #'(τ_arg ...)
-                         #:expected 
+   #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
+   #:with (~TCs ([generic-op ty-concrete-op] ...) ...) #'(TC ...)
+   #:with (op ...)
+          (stx-appendmap
+           (lambda (gen-ops conc-op-tys TC)
+             (map
+              (lambda (o tys)
+                (with-handlers
+                  ([exn:fail:syntax:unbound?
+                    (lambda (e)
+                      (type-error
+                       #:src this-syntax
+                       #:msg
+                       (format
+                        (string-append
+                         "~a instance undefined. "
+                         "Cannot instantiate function with constraints "
+                         "~a with:\n  ~a")
+                        (type->str
+                         (let* ([old-orig (get-orig TC)]
+                                [new-orig
+                                 (and
+                                  old-orig
+                                  (substs
+                                   (stx-map get-orig (lookup-Xs/keep-unsolved #'Xs #'cs))
+                                   #'Xs old-orig
+                                   (lambda (x y)
+                                     (equal? (syntax->datum x)
+                                             (syntax->datum y)))))])
+                           (syntax-property TC 'orig (list new-orig))))
+                        (types->str #'(TCX ...))
+                        (string-join
                          (stx-map 
-                             (lambda (tyin) 
-                               (define old-orig (get-orig tyin))
-                               (define new-orig
-                                 (and old-orig
-                                      (substs 
-                                          (stx-map get-orig (lookup-Xs/keep-unsolved #'Xs #'cs)) #'Xs old-orig
-                                          (lambda (x y) 
-                                            (equal? (syntax->datum x) (syntax->datum y))))))
-                               (syntax-property tyin 'orig (list new-orig)))
-                           #'(τ_in ...)))
-         #:with τ_out* (if (stx-null? #'(unsolved-X ...))
-                           #'τ_out
-                           (syntax-parse #'τ_out
-                             [(~?∀ (Y ...) τ_out)
-                              (unless (→? #'τ_out)
-                                (raise-app-poly-infer-error this-syntax #'(τ_in ...) #'(τ_arg ...) #'e_fn))
-                              #'(?∀ (unsolved-X ... Y ...) τ_out)]))
-         ------
-         [⊢ (#%plain-app- (#%plain-app- e_fn- op ...) e_arg- ...) ⇒ τ_out*]]
+                          (lambda (X ty-solved)
+                            (string-append (type->str X) " : " (type->str ty-solved)))
+                          #'Xs (lookup-Xs/keep-unsolved #'Xs #'cs)) ", "))))]
+                   [(lambda _ #t)
+                    (lambda (e) (displayln "other exn")(displayln e)
+                            (error 'lookup))])
+                  (lookup-op o tys)))
+              (stx-map (lambda (o) (format-id this-syntax "~a" o #:source this-syntax)) gen-ops)
+              (stx-map
+               (syntax-parser
+                 [(~?∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
+               conc-op-tys)))
+           #'((generic-op ...) ...) #'((ty-concrete-op ...) ...) #'(TC ...))
+   ;; ) arity check
+   #:fail-unless (stx-length=? #'(τ_in ...) #'e_args)
+                 (mk-app-err-msg this-syntax #:expected #'(τ_in ...)
+                                 #:note "Wrong number of arguments.")
+   ;; ) compute argument types; re-use args expanded during solve
+   #:with ([e_arg2- τ_arg2] ...) (let ([n (stx-length #'(e_arg1- ...))])
+                                   (infers+erase
+                                    (stx-map
+                                     add-expected-type
+                                     (stx-drop #'e_args n)
+                                     (stx-drop #'(τ_in ...) n))))
+   #:with (τ_arg1 ...) (stx-map typeof #'(e_arg1- ...))
+   #:with (τ_arg ...) #'(τ_arg1 ... τ_arg2 ...)
+   #:with (e_arg- ...) #'(e_arg1- ... e_arg2- ...)
+   ;; ) typecheck args
+   #:fail-unless (typechecks? #'(τ_arg ...) #'(τ_in ...))
+                 (mk-app-err-msg this-syntax
+                  #:given #'(τ_arg ...)
+                  #:expected
+                  (stx-map
+                   (lambda (tyin)
+                     (define old-orig (get-orig tyin))
+                     (define new-orig
+                       (and old-orig
+                            (substs
+                             (stx-map
+                              get-orig
+                              (lookup-Xs/keep-unsolved #'Xs #'cs)) #'Xs old-orig
+                             (lambda (x y)
+                               (equal? (syntax->datum x) (syntax->datum y))))))
+                     (syntax-property tyin 'orig (list new-orig)))
+                   #'(τ_in ...)))
+   #:with τ_out* (if (stx-null? #'(unsolved-X ...))
+                     #'τ_out
+                     (syntax-parse #'τ_out
+                       [(~?∀ (Y ...) τ_out)
+                        (unless (→? #'τ_out)
+                          (raise-app-poly-infer-error this-syntax
+                            #'(τ_in ...) #'(τ_arg ...) #'e_fn))
+                        #'(?∀ (unsolved-X ... Y ...) τ_out)]))
+   ------
+   [⊢ (#%plain-app- (#%plain-app- e_fn- op ...) e_arg- ...) ⇒ τ_out*]]
   [(_ . rst) ≫ --- [≻ (mlish:#%app . rst)]])
 
 (begin-for-syntax
