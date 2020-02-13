@@ -7,18 +7,11 @@
              macrotypes/type-constraints macrotypes/variance-constraints)
  (for-meta 2 racket/base))
 
-(extends
- turnstile/examples/ext-stlc
- #:except → define #%app λ #%datum
-          + - * void = zero? sub1 add1 not let let* and
- #:rename [~→ ~ext-stlc:→])
+(extends turnstile/examples/ext-stlc #:except define #%app λ let)
 (reuse inst #:from turnstile/examples/sysf)
-(require (only-in turnstile/examples/ext-stlc → →?))
 (require (only-in turnstile/examples/sysf ~∀ ∀ ∀? mk-∀- Λ))
 (reuse × tup proj define-type-alias #:from turnstile/examples/stlc+rec-iso)
 (require (only-in turnstile/examples/stlc+rec-iso ~× ×?))
-(provide (rename-out [ext-stlc:and and] [ext-stlc:#%datum #%datum] [tc-top #%top])
-         only-in)
 (reuse member length reverse list-ref cons nil isnil head tail list
        #:from turnstile/examples/stlc+cons)
 (require (prefix-in stlc+cons: (only-in turnstile/examples/stlc+cons list cons nil)))
@@ -39,21 +32,15 @@
 
 (provide define-type define-types
          (for-syntax make-extra-info-transformer)
-         → →/test ?∀ (for-syntax ~?∀ →? (rename-out [~ext-stlc:→ ~→]))
-         (typed-out/unsafe [+ : (→ Int Int Int)]
-                    [- : (→ Int Int Int)]
-                    [* : (→ Int Int Int)]
+         →/test ?∀ (for-syntax ~?∀)
+         (typed-out/unsafe 
                     [max : (→ Int Int Int)]
                     [min : (→ Int Int Int)]
-                    [= : (→ Int Int Bool)]
                     [<= : (→ Int Int Bool)]
                     [>= : (→ Int Int Bool)]
                     [< : (→ Int Int Bool)]
                     [> : (→ Int Int Bool)]
                     [modulo : (→ Int Int Int)]
-                    [zero? : (→ Int Bool)]
-                    [sub1 : (→ Int Int)]
-                    [add1 : (→ Int Int)]
                     [abs : (→ Int Int)]
                     [even? : (→ Int Bool)]
                     [odd? : (→ Int Bool)]
@@ -109,7 +96,6 @@
                     [hash-count : (∀ (K V) (→ (Hash K V) Int))]
                     [equal? : (∀ (X) (→ X X Bool))]
                     )
-         not void
          define match match2 λ ?Λ
          (rename-out [mlish:#%app #%app])
          cond when unless
@@ -121,16 +107,16 @@
          for for*
          for/list for/vector for*/vector for*/list for/fold for/hash for/sum
          printf format
-         let let*
+         let
          Hash hash hash-ref
          String-Port Input-Port
          write-string string-length string-copy!
          number->string string-append
          quotient+remainder
          set!
-         provide-type
-         (rename-out [mlish-provide provide])
-         require-typed
+         provide-type 
+         (rename-out [mlish-provide provide] [tc-top #%top])
+         require-typed only-in
          Regexp
          read)
 
@@ -428,7 +414,7 @@
    #:with f- (add-orig (generate-temporary #'f) #'f)
    #:with e_ann (syntax/loc #'e (add-expected e τ_out))
    #:with (τ+orig ...) (stx-map (λ (t) (add-orig t t)) #'(τ ... τ_out))
-   #:with (~and ty_fn_expected (~?∀ _ (~ext-stlc:→ _ ... out_expected)))
+   #:with (~and ty_fn_expected (~?∀ _ (~→ _ ... out_expected)))
           (set-stx-prop/preserved
             ((current-type-eval) #'(?∀ Ys (ext-stlc:→ τ+orig ...)))
             'orig
@@ -942,14 +928,14 @@
 
 ; all λs have type (?∀ (X ...) (→ τ_in ... τ_out))
 (define-typed-syntax λ #:datum-literals (:)
-  [(λ (x:id ...) body) ⇐ (~?∀ (X ...) (~ext-stlc:→ τ_in ... τ_out)) ≫
+  [(λ (x:id ...) body) ⇐ (~?∀ (X ...) (~→ τ_in ... τ_out)) ≫
    #:fail-unless (stx-length=? #'[x ...] #'[τ_in ...])
    (format "expected a function of ~a arguments, got one with ~a arguments"
            (stx-length #'[τ_in ...]) (stx-length #'[x ...]))
    [([X ≫ _ :: #%type] ...) ([x ≫ x- : τ_in] ...) ⊢ [body ≫ body- ⇐ (ev/m τ_out)]]
    --------
    [⊢ (#%plain-lambda- (x- ...) body-)]]
-  [(λ ([x : τ_x] ...) body) ⇐ (~?∀ (V ...) (~ext-stlc:→ τ_in ... τ_out)) ≫
+  [(λ ([x : τ_x] ...) body) ⇐ (~?∀ (V ...) (~→ τ_in ... τ_out)) ≫
    #:with [X ...] (compute-tyvars #'(τ_x ...))
    #:with ((X- ...) (τ_x-:type ...)) (expands/tvctx #'(τ_x ...) #'(X ...))
 ;   [[X ≫ X- :: #%type] ... ⊢ [τ_x ≫ τ_x- ⇐ :: #%type] ...]
@@ -973,7 +959,7 @@
 (define-typed-syntax mlish:#%app
   [(_ e_fn e_arg ...) ≫
    ;; compute fn type (ie ∀ and →)
-   [⊢ e_fn ≫ e_fn- ⇒ (~?∀ Xs (~ext-stlc:→ . tyX_args))]
+   [⊢ e_fn ≫ e_fn- ⇒ (~?∀ Xs (~→ . tyX_args))]
    ;; solve for type variables Xs
    #:with [[e_arg- ...] Xs* cs] (solve #'Xs #'tyX_args this-syntax)
    ;; instantiate polymorphic function type
@@ -1002,10 +988,6 @@
    --------
    [⊢ (#%plain-app- e_fn- e_arg- ...) ⇒ τ_out*]])
 
-
-;; define these explicitly (instead of typed-out), for use in desugarings
-(define-primop/unsafe void : (→ Unit))
-(define-primop/unsafe not : (→ Bool Bool))
 
 ;; cond and other conditionals
 (define-typed-syntax cond
@@ -1211,7 +1193,7 @@
    --------
    [⊢ (#%plain-app- format- s- e- ...) ⇒ : #,String+]])
 
-(define-typed-syntax let
+(define-typed-syntax let ; add named let
   [(let name:id (~datum :) ty:type ~! ([x:id e] ...) b ... body) ≫
    [⊢ [e ≫ e- ⇒ : ty_e] ...]
    [() ([name ≫ name- : (→ ty_e ... ty.norm)] [x ≫ x- : ty_e] ...)
@@ -1223,10 +1205,6 @@
   [(let ([x:id e] ...) body ...) ≫
    --------
    [≻ (ext-stlc:let ([x e] ...) (ext-stlc:begin body ...))]])
-(define-typed-syntax let*
-  [(let* ([x:id e] ...) body ...) ≫
-   --------
-   [≻ (ext-stlc:let* ([x e] ...) (ext-stlc:begin body ...))]])
 
 ;; hash
 (define-type-constructor Hash #:arity = 2)
