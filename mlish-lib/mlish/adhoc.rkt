@@ -14,13 +14,12 @@
 (require (postfix-in - racket/flonum)
          (for-syntax racket/set racket/string macrotypes/type-constraints)
          (for-meta 2 racket/base syntax/parse racket/syntax)
- (only-in turnstile/examples/ext-stlc
-          [#%app ext-stlc:#%app] [λ ext-stlc:λ] [begin ext-stlc:begin])
+ (only-in turnstile/examples/ext-stlc [λ ext-stlc:λ])
  (only-in turnstile/examples/sysf
           ~∀ ∀ ∀? mk-∀- Λ)
  (only-in "mlish.rkt"
           →? [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app]
-          [define mlish:define]
+          [define mlish:define] [begin mlish:begin]
           [inst mlish:inst]
           ~?∀ Int Bool String Char Float))
 
@@ -217,7 +216,7 @@
             (define- f-
               ;(Λ Ys (ext-stlc:λ ([x : τ] ...) (ext-stlc:begin e_body ... e_ann)))))])
               (liftedλ {Y ...} ([x : τ] ... #:where TC ...) 
-                       #,(syntax/loc #'e_ann (ext-stlc:begin e_body ... e_ann))))))]]
+                       #,(syntax/loc #'e_ann (mlish:begin e_body ... e_ann))))))]]
   [(_ . rst) ≫ --- [≻ (mlish:define . rst)]])
 
 (define-syntax → ; wrapping →
@@ -317,35 +316,14 @@
 
 ;; #%app --------------------------------------------------
 (define-typed-syntax adhoc:#%app
-  [(~and this-app (_ e_fn . e_args)) ≫
-;   #:when (printf "app: ~a\n" (syntax->datum #'(e_fn . e_args)))
-   ;; ) compute fn type (ie ∀ and →) 
-   [⊢ e_fn ≫ e_fn- ⇒ (~and ty_fn (~?∀ Xs ty_fnX))]
-   --------
-   [≻ 
-    #,(cond 
-       [(stx-null? #'Xs)
-        (define/with-syntax tyX_args
-          (syntax-parse #'ty_fnX
-            [(~mlish:→ . tyX_args) #'tyX_args]))
-        (syntax-parse #'(e_args tyX_args)
-          [((e_arg ...) (τ_inX ... _))
-           #:fail-unless (stx-length=? #'(e_arg ...) #'(τ_inX ...))
-           (mk-app-err-msg #'this-app #:expected #'(τ_inX ...) 
-                           #:note "Wrong number of arguments.")
-           #:with e_fn/ty (assign-type #'e_fn- #'(mlish:→ . tyX_args))
-           #'(ext-stlc:#%app e_fn/ty (add-expected e_arg τ_inX) ...)])]
-       [else
-     (syntax-parse #'ty_fnX
-       ;; no typeclasses
-      [(~mlish:→ . tyX_args) #'(mlish:#%app e_fn . e_args)]
-      ;; handle type class constraints ----------------------------------------
-      [(~=> TCX ... (~mlish:→ . tyX_args))
-       ;; ) solve for type variables Xs
-       (define/with-syntax ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args #'this-app))
-       ;; ) instantiate polymorphic function type
-       (syntax-parse (inst-types/cs #'Xs #'cs #'((TCX ...) tyX_args))
-         [((TC ...) (τ_in ... τ_out)) ; concrete types
+  [(_ e_fn . e_args) ≫
+   ;; ) compute fn type, with TCs
+   [⊢ e_fn ≫ e_fn- ⇒ (~?∀ Xs (~=> TCX ... (~mlish:→ . tyX_args)))]
+   ;; ) solve for type variables Xs
+   #:with ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args this-syntax)
+   ;; ) instantiate polymorphic function type, to get concrete types
+   #:with ((TC ...) (τ_in ... τ_out)) (inst-types/cs #'Xs #'cs #'((TCX ...) tyX_args))
+   ;; TODO: fix this indenting eventually
           #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
           #:with (~TCs ([generic-op ty-concrete-op] ...) ...) #'(TC ...)
           #:with (op ...)
@@ -356,7 +334,7 @@
                          (with-handlers 
                            ([exn:fail:syntax:unbound? 
                              (lambda (e)
-                               (type-error #:src #'this-app
+                               (type-error #:src this-syntax
                                 #:msg 
                                 (format 
                                  (string-append
@@ -384,7 +362,7 @@
                              (lambda (e) (displayln "other exn")(displayln e)
                              (error 'lookup))])
                          (lookup-op o tys)))
-                       (stx-map (lambda (o) (format-id #'this-app "~a" o #:source #'this-app)) gen-ops)
+                       (stx-map (lambda (o) (format-id this-syntax "~a" o #:source this-syntax)) gen-ops)
                        (stx-map
                          (syntax-parser
                            [(~∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
@@ -392,7 +370,7 @@
                    #'((generic-op ...) ...) #'((ty-concrete-op ...) ...) #'(TC ...))
           ;; ) arity check
           #:fail-unless (stx-length=? #'(τ_in ...) #'e_args)
-                        (mk-app-err-msg #'this-app #:expected #'(τ_in ...)
+                        (mk-app-err-msg this-syntax #:expected #'(τ_in ...)
                                         #:note "Wrong number of arguments.")
           ;; ) compute argument types; re-use args expanded during solve
           #:with ([e_arg2- τ_arg2] ...) (let ([n (stx-length #'(e_arg1- ...))])
@@ -404,7 +382,7 @@
           #:with (e_arg- ...) #'(e_arg1- ... e_arg2- ...)
           ;; ) typecheck args
           #:fail-unless (typechecks? #'(τ_arg ...) #'(τ_in ...))
-                        (mk-app-err-msg #'this-app
+                        (mk-app-err-msg this-syntax
                          #:given #'(τ_arg ...)
                          #:expected 
                          (stx-map 
@@ -423,16 +401,11 @@
                            (syntax-parse #'τ_out
                              [(~?∀ (Y ...) τ_out)
                               (unless (→? #'τ_out)
-                                (raise-app-poly-infer-error #'this-app #'(τ_in ...) #'(τ_arg ...) #'e_fn))
+                                (raise-app-poly-infer-error this-syntax #'(τ_in ...) #'(τ_arg ...) #'e_fn))
                               (mk-∀- #'(unsolved-X ... Y ...) #'(τ_out))]))
-          (assign-type #'(#%plain-app- (#%plain-app- e_fn- op ...) e_arg- ...) #'τ_out*)])])])]]
-  [(_ e_fn . e_args) ≫ ; err case; e_fn is not a function
-   [⊢ e_fn ≫ e_fn- ⇒ τ_fn]
-   --------
-   [#:error 
-    (type-error #:src #'this-app
-                #:msg (format "Expected expression ~a to have → type, got: ~a"
-                              (syntax->datum #'e_fn) (type->str #'τ_fn)))]])
+         ------
+         [⊢ (#%plain-app- (#%plain-app- e_fn- op ...) e_arg- ...) ⇒ τ_out*]]
+  [(_ . rst) ≫ --- [≻ (mlish:#%app . rst)]])
 
 (provide (typed-out/unsafe 
           [string=? : (→ String String Bool)]
