@@ -47,6 +47,7 @@
                     [min : (→ Int Int Int)]
                     [= : (→ Int Int Bool)]
                     [<= : (→ Int Int Bool)]
+                    [>= : (→ Int Int Bool)]
                     [< : (→ Int Int Bool)]
                     [> : (→ Int Int Bool)]
                     [modulo : (→ Int Int Int)]
@@ -63,7 +64,11 @@
                     [string : (→ Char String)]
                     [sleep : (→ Int Unit)]
                     [string=? : (→ String String Bool)]
+                    [string<? : (→ String String Bool)]
+                    [string>? : (→ String String Bool)]
                     [string<=? : (→ String String Bool)]
+                    [string>=? : (→ String String Bool)]
+                    [char=? : (→ Char Char Bool)]
                     [newline : (→ Unit)]
                     [open-output-string : (→ String-Port)]
                     [get-output-string : (→ String-Port String)]
@@ -105,7 +110,7 @@
                     [equal? : (∀ (X) (→ X X Bool))]
                     )
          not void
-         define match match2 λ
+         define match match2 λ ?Λ
          (rename-out [mlish:#%app #%app])
          cond when unless
          Channel make-channel

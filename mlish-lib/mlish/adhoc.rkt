@@ -7,22 +7,16 @@
          (rename-out [liftedλ λ]
                      [adhoc:#%app #%app]
                      [define/tc define])
-         inst
          → →/test
          => =>/test)
 
-(require (postfix-in - racket/flonum)
-         (for-syntax racket/set racket/string macrotypes/type-constraints)
+(require (for-syntax racket/set racket/string macrotypes/type-constraints)
          (for-meta 2 racket/base syntax/parse racket/syntax)
  (only-in turnstile/examples/ext-stlc [λ ext-stlc:λ])
- (only-in turnstile/examples/sysf
-          ~∀ ∀ ∀? mk-∀- Λ)
  (only-in "mlish.rkt"
-          →? [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app]
+          [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app] [λ mlish:λ]
           [define mlish:define] [begin mlish:begin]
-          [inst mlish:inst]
-          ~?∀ Int Bool String Char Float))
-
+          →? ?Λ ~?∀ ?∀))
 
 (define-type-constructor => #:arity > 0)
 
@@ -34,13 +28,6 @@
                               #:name [name #f]
                               #:action [other #f])
     (syntax-parse stx
-      #;[(app . rst)
-         #:when (not (equal? '#%app (syntax->datum #'app)))
-         (mk-app-err-msg (syntax/loc stx (#%app app . rst))
-                         #:expected expected-τs
-                         #:given given-τs
-                         #:note note
-                         #:name name)]
       [(app e_fn e_arg ...)
        (define fn-name
          (if name name
@@ -204,9 +191,10 @@
    ;; TODO: check that specified return type is correct
    ;; - currently cannot do it here; to do the check here, need all types of
    ;;  top-lvl fns, since they can call each other
-   #:with (~and ty_fn_expected (~∀ _ (~=> _ ... (~mlish:→ _ ... out_expected))))
+   #:with (~and ty_fn_expected (~?∀ _ (~=> _ ... (~mlish:→ _ ... out_expected))))
           (syntax-property 
-              ((current-type-eval) #'(∀ Ys (=> TC ... (mlish:→ τ+orig ...))))
+           ((current-type-eval)
+            #'(?∀ Ys (=> TC ... (mlish:→ τ+orig ...))))
             'orig
             (list #'(→ τ+orig ...)))
    --------
@@ -214,22 +202,21 @@
         (define-typed-variable-rename f ≫ f- : ty_fn_expected)
         #,(quasisyntax/loc this-syntax
             (define- f-
-              ;(Λ Ys (ext-stlc:λ ([x : τ] ...) (ext-stlc:begin e_body ... e_ann)))))])
               (liftedλ {Y ...} ([x : τ] ... #:where TC ...) 
-                       #,(syntax/loc #'e_ann (mlish:begin e_body ... e_ann))))))]]
+               #,(syntax/loc #'e_ann (mlish:begin e_body ... e_ann))))))]]
   [(_ . rst) ≫ --- [≻ (mlish:define . rst)]])
 
 (define-syntax → ; wrapping →
   (syntax-parser
     [(_ ty ... #:TC TC ...)
-     #'(∀ () (=> TC ... (mlish:→ ty ...)))]
+     #'(=> TC ... (mlish:→ ty ...))]
     [(_ Xs . rst)
      #:when (brace? #'Xs)
      #:with (X ...) #'Xs
      (syntax-property 
-       #'(∀ (X ...)  (mlish:→ . rst))
+       #'(?∀ (X ...)  (mlish:→ . rst))
        'orig (list #'(→ . rst)))]
-    [(_ . rst) (set-stx-prop/preserved #'(∀ () (mlish:→ . rst)) 'orig (list #'(→ . rst)))]))
+    [(_ . ts) (set-stx-prop/preserved #'(mlish:→ . ts) 'orig `(,#'(→ . ts)))]))
 
 ; special arrow that computes free vars; for use with tests
 ; (because we can't write explicit forall)
@@ -237,28 +224,17 @@
   (syntax-parser
     [(_ (~and Xs (X:id ...)) . rst)
      #:when (brace? #'Xs)
-     #'(∀ (X ...) (mlish:→ . rst))]
+     #'(?∀ (X ...) (mlish:→ . rst))]
     [(_ . rst)
      #:with Xs (compute-tyvars #'rst)
-     #'(∀ Xs (mlish:→ . rst))]))
+     #'(?∀ Xs (mlish:→ . rst))]))
 
 (define-syntax =>/test 
   (syntax-parser
     [(_ . (~and rst (TC ... (_arr . tys_arr))))
      #:with Xs (compute-tyvars #'rst)
-     #'(∀ Xs (=> TC ... (mlish:→ . tys_arr)))]))
+     #'(?∀ Xs (=> TC ... (mlish:→ . tys_arr)))]))
 
-; redefine these to use lifted →
-(provide (typed-out/unsafe
-          [+ : (→ Int Int Int)]
-          [- : (→ Int Int Int)]
-          [* : (→ Int Int Int)]
-          [= : (→ Int Int Bool)]
-          [<= : (→ Int Int Bool)]
-          [>= : (→ Int Int Bool)]
-          [< : (→ Int Int Bool)]
-          [> : (→ Int Int Bool)]))
-         
 ;; λ --------------------------------------------------------------------------
 (define-typed-syntax BindTC
   [(_ (TC ...) body) ≫
@@ -276,8 +252,7 @@
    --------
    [⊢ (#%plain-lambda- (mangled-op- ...) body-) ⇒ #,(mk-=>- #'(TC+ ... t-))]])
 
-; all λs have type (∀ (X ...) (→ τ_in ... τ_out)), even monomorphic fns
-(define-typed-syntax liftedλ; #:export-as λ
+(define-typed-syntax liftedλ
   [(_ ([x:id (~datum :) ty] ... #:where TC ...) body) ≫
    #:with (X ...) (compute-tyvars #'(ty ...))
    --------
@@ -285,34 +260,8 @@
   [(_ (~and Xs (X ...)) ([x:id (~datum :) ty] ... #:where TC ...) body) ≫
    #:when (brace? #'Xs)
    --------
-   [≻ (Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : ty] ...) body)))]]
-  [(_ ([x:id (~datum :) ty] ...) body) ≫ ; no TC
-   #:with (X ...) (compute-tyvars #'(ty ...))
-   #:with (~∀ () (~mlish:→ _ ... body-ty)) (get-expected-type this-syntax)
-   --------
-   [≻ (Λ (X ...) (ext-stlc:λ ([x : ty] ...) (add-expected body body-ty)))]]
-  [(_ ([x:id (~datum :) ty] ...) body) ≫ ; no TC, ignoring expected-type
-   #:with (X ...) (compute-tyvars #'(ty ...))
-   --------
-   [≻ (Λ (X ...) (ext-stlc:λ ([x : ty] ...) body))]]
-  [(_ (x:id ...+) body) ≫
-   #:with (~?∀ Xs expected) (get-expected-type this-syntax)
-   #:do [(unless (→? #'expected)
-           (type-error #:src this-syntax #:msg "λ parameters must have type annotations"))]
-   #:with (~mlish:→ arg-ty ... body-ty) #'expected
-   #:do [(unless (stx-length=? #'[x ...] #'[arg-ty ...])
-           (type-error #:src this-syntax #:msg
-                       (format "expected a function of ~a arguments, got one with ~a arguments"
-                               (stx-length #'[arg-ty ...] #'[x ...]))))]
-   --------
-   [≻ (Λ Xs (ext-stlc:λ ([x : arg-ty] ...) #,(add-expected-type #'body #'body-ty)))]]
-  #;[(_ args body)
-   #:with (~∀ () (~mlish:→ arg-ty ... body-ty)) (get-expected-type stx)
-   #`(Λ () (ext-stlc:λ args #,(add-expected-type #'body #'body-ty)))]
-  #;[(_ (~and x+tys ([_ (~datum :) ty] ...)) . body)
-   #:with Xs (compute-tyvars #'(ty ...))
-   ;; TODO is there a way to have λs that refer to ids defined after them?
-   #'(Λ Xs (ext-stlc:λ x+tys . body))])
+   [≻ (?Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : ty] ...) body)))]]
+  [(_ . rst) ≫ --- [≻ (mlish:λ . rst)]])
 
 ;; #%app --------------------------------------------------
 (define-typed-syntax adhoc:#%app
@@ -365,7 +314,7 @@
                        (stx-map (lambda (o) (format-id this-syntax "~a" o #:source this-syntax)) gen-ops)
                        (stx-map
                          (syntax-parser
-                           [(~∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
+                           [(~?∀ _ (~mlish:→ ty_in ... _)) #'(ty_in ...)])
                          conc-op-tys)))
                    #'((generic-op ...) ...) #'((ty-concrete-op ...) ...) #'(TC ...))
           ;; ) arity check
@@ -402,32 +351,10 @@
                              [(~?∀ (Y ...) τ_out)
                               (unless (→? #'τ_out)
                                 (raise-app-poly-infer-error this-syntax #'(τ_in ...) #'(τ_arg ...) #'e_fn))
-                              (mk-∀- #'(unsolved-X ... Y ...) #'(τ_out))]))
+                              #'(?∀ (unsolved-X ... Y ...) τ_out)]))
          ------
          [⊢ (#%plain-app- (#%plain-app- e_fn- op ...) e_arg- ...) ⇒ τ_out*]]
   [(_ . rst) ≫ --- [≻ (mlish:#%app . rst)]])
-
-(provide (typed-out/unsafe 
-          [string=? : (→ String String Bool)]
-          [string<? : (→ String String Bool)]
-          [string<=? : (→ String String Bool)]
-          [string>? : (→ String String Bool)]
-          [string>=? : (→ String String Bool)]
-          [char=? : (→ Char Char Bool)]))
-
-(provide (typed-out/unsafe
-          [fl+ : (→ Float Float Float)]
-          [fl- : (→ Float Float Float)]
-          [fl* : (→ Float Float Float)]
-          [fl= : (→ Float Float Bool)]))
-
-(define-typed-syntax (inst e ty ...) ≫
-  [⊢ (mlish:inst e ty ...) ≫ e- ⇒ ty_e]
-  --------
-  [⊢ e- ⇒ #,(cond
-             [(→? #'ty_e) (mk-∀- #'() #'(ty_e))]
-             [(=>? #'ty_e) (mk-∀- #'() #'(ty_e))]
-             [else #'ty_e])])
 
 (begin-for-syntax
  ;; - this function should be wrapped with err handlers,
@@ -450,7 +377,7 @@
    [((~Any tycon ty-arg ...) ...) ≫
     ;; 1) look up concrete op corresponding to generic op and input tys
     [⊢ #,(mangle gen-op #'(tycon ...)) ≫ conc-op
-       ⇒ (~∀ Xs (~=> TC ... (~mlish:→ . ty-args)))]
+       ⇒ (~?∀ Xs (~=> TC ... (~mlish:→ . ty-args)))]
     ;; 2) compute sub-ops based on TC constraints
     ;;    (will include gen-op --- for smaller type)
     #:with (~TCs ([op _] ...) ...) #'(TC ...) ; order matters, must match order of arg types
@@ -463,7 +390,7 @@
                   #'((sub-op ...) ...)
                   (syntax->list #'((ty-arg ...) ...))))
        ;; 4) drop the TCs in result type, the proper subops are already applied
-       ⇒ (∀ Xs (mlish:→ . ty-args))]] ; conc type, TCs dropped
+       ⇒ (?∀ Xs (mlish:→ . ty-args))]] ; conc type, TCs dropped
    ;; base type --------------------------------------------------
    [(((~literal #%plain-app) ty-internal) ...) ≫
     [⊢ #,(mangle gen-op #'(ty-internal ...)) ≫ op- ⇒ t-]
@@ -485,9 +412,9 @@
     (stx-map get-type-tag ts))
   (define (get-fn-ty-in-tags ty-fn)
    (syntax-parse ty-fn
-     [(~∀ _ (~mlish:→ ty_in ... _))
+     [(~?∀ _ (~mlish:→ ty_in ... _))
       (get-type-tags #'(ty_in ...))]
-     [(~∀ _ (~=> _ ... (~mlish:→ ty_in ... _)))
+     [(~?∀ _ (~=> _ ... (~mlish:→ ty_in ... _)))
       (get-type-tags #'(ty_in ...))]))
  (define (TC-exists? TC #:ctx [ctx TC]) ; throws exn if fail
    (syntax-parse TC
@@ -610,11 +537,10 @@
    ;; #:with Xs+ #'(X- ...)
    #:when (TCs-exist? #'(TCsub ...) #:ctx this-syntax)
    ;; simulate as if the declared concrete-op* has TC ... predicates
-   ;; TODO: fix this manual deconstruction and assembly
-   #:with ((app fa (lam _ ei (app2 lst ty_fn))) ...) #'(ty-concrete-op-expected ...)
    #:with (ty-concrete-op-expected-withTC ...) 
-;          (stx-map (current-type-eval) #'((app fa (lam Xs+ ei (app2 lst (=> TC+ ... ty_fn)))) ...))
-          (stx-map (lambda (t) (mk-∀- #'Xs+ (list (mk-=>- #`(TC+ ... #,t))))) #'(ty_fn ...))
+          (stx-map
+           (lambda (t) #`(?∀ Xs+ (=> TC+ ... #,t)))
+           #'(ty-concrete-op-expected ...))
    #:fail-unless (set=? (syntax->datum #'(generic-op ...)) 
                         (syntax->datum #'(generic-op-expected ...)))
                  (type-error #:src this-syntax
