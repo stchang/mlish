@@ -12,7 +12,7 @@
 
 (require (for-syntax racket/set racket/string macrotypes/type-constraints)
          (for-meta 2 racket/base syntax/parse racket/syntax)
- (only-in turnstile/examples/ext-stlc [λ ext-stlc:λ])
+ (only-in turnstile/examples/optimize/ext-stlc [λ ext-stlc:λ])
  (only-in "mlish.rkt"
           [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app] [λ mlish:λ]
           [define mlish:define] [begin mlish:begin]

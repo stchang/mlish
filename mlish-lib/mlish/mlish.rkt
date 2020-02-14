@@ -6,15 +6,15 @@
 ;; - pattern matching
 ;; - (local) type inference
 
-(extends turnstile/examples/ext-stlc #:except define #%app λ let)
+(extends turnstile/examples/optimize/ext-stlc #:except define #%app λ let)
 (reuse inst
-       #:from turnstile/examples/sysf)
+       #:from turnstile/examples/optimize/sysf)
 (reuse × tup proj define-type-alias
-       #:from turnstile/examples/stlc+rec-iso)
+       #:from turnstile/examples/optimize/stlc+rec-iso)
 (reuse Ref ref deref :=
-       #:from turnstile/examples/stlc+box)
+       #:from turnstile/examples/optimize/stlc+box)
 (reuse List member length reverse list-ref cons nil isnil head tail list
-       #:from turnstile/examples/stlc+cons)
+       #:from turnstile/examples/optimize/stlc+cons)
 
 (provide
  define match match2 λ define-type define-types let cond when unless set!
@@ -105,10 +105,10 @@
              macrotypes/type-constraints macrotypes/variance-constraints)
  (for-meta 2 racket/base)
 
- (only-in turnstile/examples/sysf ~∀ ∀ ∀? mk-∀- Λ)
- (only-in turnstile/examples/stlc+rec-iso ~× ×?)
- (only-in turnstile/examples/stlc+cons ~List List? mk-List-)
- (only-in turnstile/examples/stlc+reco+var tup proj × mk-×-))
+ (only-in turnstile/examples/optimize/sysf ~∀ ∀ ∀? mk-∀- Λ)
+ (only-in turnstile/examples/optimize/stlc+rec-iso ~× ×?)
+ (only-in turnstile/examples/optimize/stlc+cons ~List List? mk-List-)
+ (only-in turnstile/examples/optimize/stlc+reco+var tup proj × mk-×-))
 
 ;; creating possibly polymorphic types
 ;; ?∀ only wraps a type in a forall if there's at least one type variable
