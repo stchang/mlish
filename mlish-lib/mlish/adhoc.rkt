@@ -271,7 +271,8 @@
    ;; ) solve for type variables Xs
    #:with ((e_arg1- ...) Xs* cs) (solve #'Xs #'tyX_args this-syntax)
    ;; ) instantiate polymorphic function type, to get concrete types
-   #:with ((TC ...) (τ_in ... τ_out)) (inst-types/cs #'Xs #'cs #'((TCX ...) tyX_args))
+   #:with ((TC ...) (τ_in ... τ_out))
+          (inst-types/cs/orig #'Xs #'cs #'((TCX ...) tyX_args) datum=?)
    #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
    #:with (~TCs ([generic-op ty-concrete-op] ...) ...) #'(TC ...)
    #:with (op ...)

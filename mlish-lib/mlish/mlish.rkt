@@ -950,7 +950,7 @@
    ;; solve for type variables Xs
    #:with [[e_arg- ...] Xs* cs] (solve #'Xs #'tyX_args this-syntax)
    ;; instantiate polymorphic function type
-   #:with [τ_in ... τ_out] (inst-types/cs #'Xs* #'cs #'tyX_args)
+   #:with [τ_in ... τ_out] (inst-types/cs/orig #'Xs* #'cs #'tyX_args datum=?)
    #:with (unsolved-X ...) (find-free-Xs #'Xs* #'τ_out)
    ;; arity check
    #:fail-unless (stx-length=? #'[τ_in ...] #'[e_arg ...])
