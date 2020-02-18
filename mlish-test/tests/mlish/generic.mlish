@@ -1,6 +1,6 @@
 #lang mlish+adhoc
 (require mlish/match2
-	 rackunit/turnstile)
+         rackunit/turnstile)
 
 (define-typeclass (Eq X)
   [== : (→ X X Bool)])
@@ -46,7 +46,7 @@
 
 (define (member? [x : X] [lst : (List X)] #:where (Eq X) -> Bool)
   (match lst with
-   [[] -> #f]
+   [nil -> #f]
    [y :: ys -> (or (== x y) (member? x ys))]))
 
 (check-type (member? 1 nil) : Bool -> #f)
@@ -150,7 +150,7 @@
 (check-type (square2 5) : Int -> 25)
 (check-type (square2 2.5) : Float -> 6.25)
 (define (squares [xyz : (× X Y Z)] #:where (Num X) (Num Y) (Num Z)-> (× X Y Z))
-  (match2 xyz with
+  (match xyz with
    [(x,y,z) -> (tup (square x) (square y) (square z))]))
 (check-type (squares (tup 5 5 5)) : (× Int Int Int) -> (tup 25 25 25))
 (check-type (squares (tup 2.5 5 5)) : (× Float Int Int) -> (tup 6.25 25 25))
@@ -197,7 +197,7 @@
 ;; type classes for non-base types
 (define-instance (Eq X) => (Eq (List X))
  [== (λ ([l1 : (List X)] [l2 : (List X)])
-       (match2 (tup l1 l2) with
+       (match (tup l1 l2) with
         [(nil,nil) -> #t]
         [((x :: xs),(y :: ys)) -> (and (== x y) (== xs ys))]
         [_ -> #f]))])
@@ -262,7 +262,7 @@
 
 (define (andmap [p? : (→ X Bool)] [lst : (List X)] -> Bool)
   (match lst with
-   [[] -> #t]
+   [nil -> #t]
    [x :: xs -> (and (p? x) (andmap p? xs))]))
 
 ;; Set
@@ -270,7 +270,7 @@
 (define-type (Set X) (MkSet (List X)))
 (define-instance (Eq X) => (Eq (Set X))
  [== (λ ([s1 : (Set X)] [s2 : (Set X)])
-       (match2 (tup s1 s2) with
+       (match (tup s1 s2) with
         [((MkSet xs),(MkSet ys)) -> (and (andmap (λ ([y : X]) (member? y xs)) ys)
                                          (andmap (λ ([x : X]) (member? x ys)) xs))]))])
 (check-type (== (MkSet (list 1)) (MkSet (list 1))) : Bool -> #t)
@@ -289,7 +289,7 @@
 ;; type classes for non-base types: multiple constraints
 (define-instance (Eq X) (Eq Y) => (Eq (× X Y))
  [== (λ ([p1 : (× X Y)] [p2 : (× X Y)])
-       (match2 (tup p1 p2) with
+       (match (tup p1 p2) with
         [((u,v),(x,y)) -> (and (== u x) (== v y))]))])
 
 (check-type (== (tup 1 2) (tup 3 4)) : Bool -> #f)
@@ -413,7 +413,7 @@
 ;; non-base typeclass instances with subclassing
 (define-instance (Top X) => (Top (List X))
  [fun1 (λ ([l1 : (List X)] [l2 : (List X)])
-         (match2 (tup l1 l2) with
+         (match (tup l1 l2) with
           [(nil,nil) -> l2]
           [((x :: xs),(y :: ys)) -> (cons (fun1 x y) (fun1 xs ys))]
           [_ -> l1]))])
@@ -424,7 +424,7 @@
 
 (define-instance (Left X) => (Left (List X))
  [fun2 (λ ([l1 : (List X)] [l2 : (List X)])
-         (match2 (tup l1 l2) with
+         (match (tup l1 l2) with
           [(nil,nil) -> l2]
           [((x1 :: xs1),(y1 :: ys1)) -> (cons (fun2 x1 y1) (fun2 xs1 ys1))]
           [_ -> l1]))])
@@ -440,7 +440,7 @@
 ;; in both instance def, and regular fns
 (define-instance (Right X) => (Right (List X))
  [fun3 (λ ([l1 : (List X)] [l2 : (List X)])
-         (match2 (tup l1 l2) with
+         (match (tup l1 l2) with
           [(nil,nil) -> l2]
           [((x1 :: xs1),(y1 :: ys1)) -> (cons (fun1 x1 y1) (fun1 xs1 ys1))]
           [_ -> l1]))])
@@ -450,7 +450,7 @@
 
 (define-instance (Bottom X) => (Bottom (List X))
  [fun4 (λ ([l1 : (List X)] [l2 : (List X)])
-         (match2 (tup l1 l2) with
+         (match (tup l1 l2) with
           [(nil,nil) -> l2]
           [((x1 :: xs1),(y1 :: ys1)) -> (cons (fun4 x1 y1) (fun4 xs1 ys1))]
           [_ -> l1]))])

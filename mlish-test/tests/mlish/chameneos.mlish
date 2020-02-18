@@ -1,6 +1,6 @@
 #lang mlish
 (require mlish/match2
-	 rackunit/turnstile)
+         rackunit/turnstile)
 
 (define-type Color Red Yellow Blue)
 
@@ -44,7 +44,7 @@
 
 (define (get+put [ch-meet : MeetChan] -> Unit)
   (match (channel-get ch-meet) with
-   [ch v -> 
+   [ch, v ->
     (begin (channel-put ch NONE) 
            (get+put ch-meet))]))
 
@@ -52,9 +52,9 @@
   (if (zero? n)
       (get+put ch-meet)
       (match (channel-get ch-meet) with
-       [ch1 v1 -> 
+       [ch1, v1 ->
         (match (channel-get ch-meet) with
-         [ch2 v2 ->
+         [ch2, v2 ->
           (begin (channel-put ch1 (Some v2))
                  (channel-put ch2 (Some v1))
                  (swap ch-meet (sub1 n)))])])))
@@ -75,7 +75,7 @@
     (match (channel-get ch) with
      [Some c+s ->
       (match c+s with
-       [other-col other-name -> 
+       [other-col, other-name ->
         (begin
           (sleep 0)
           (sleeper 
@@ -107,7 +107,7 @@
 (define res1 (go 100 (list Blue Red Yellow)))
 
 (define (check-total [r : (List Result)] [remaining : Int] -> Bool)
-  (match2 r with
+  (match r with
    [(tup met same) :: tl -> (check-total tl (- remaining met))]
    [nil -> (= remaining 0)]))
 
@@ -121,14 +121,14 @@
 (check-type res2 : (List Int))
 (define (≤1000 [x : Int] -> Bool) (<= x 1000))
 (define (andmap [p? : (→ X Bool)] [xs : (List X)] → Bool)
-  (match2 xs with
+  (match xs with
    [nil -> #t]
    [x :: rst -> (and (p? x) (andmap p? rst))]))         
 (check-type (andmap ≤1000 res2) : Bool -> #t)
 (define (sum [l : (List Int)] -> Int)
   (match l with
    [hd :: tl -> (+ hd (sum tl))]
-   [[] -> 0]))
+   [nil -> 0]))
 (check-type (sum res2) : Int -> 2000)
   ;; -> (list (list 333 0)
   ;;          (list 333 0)

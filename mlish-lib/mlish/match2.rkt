@@ -1,6 +1,6 @@
 #lang turnstile
 
-(provide match2)
+(provide match)
 
 (require (only-in racket/match [match match-])
          (only-in "mlish.rkt" tup cons nil list ~× ×? ~List List? ⊔))
@@ -192,7 +192,7 @@
     (stx-map (lambda (p) (list (get-ctx p ty) (compile-pat p ty))) pats))
   )
 
-(define-typed-syntax match2 #:datum-literals (with ->)
+(define-typed-syntax match #:datum-literals (with ->)
   [(_ e with . clauses) ≫
    #:fail-unless (not (null? (syntax->list #'clauses))) "no clauses"
    [⊢ e ≫ e- ⇒ τ_e]

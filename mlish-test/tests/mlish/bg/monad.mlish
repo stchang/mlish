@@ -1,6 +1,6 @@
 #lang mlish
 (require mlish/match2
-	 rackunit/turnstile)
+         rackunit/turnstile)
 
 (define-type (Option A)
   [None]
@@ -112,12 +112,13 @@
 
 (check-type (>> (inst bq-head Int) bq-tails-result) : (Option Int) -> (Some 4))
 
-;; check match2 nested datatype bug
+(require (only-in mlish [match orig:match]))
+;; check match nested datatype bug
 (check-type
-    (match bq-tails-result with
+    (orig:match bq-tails-result with
      [None -> None]
      [Some bq -> (bq-head bq)]) : (Option Int) -> (Some 4))
 (check-type
-    (match2 bq-tails-result with
+    (match bq-tails-result with
      [None -> None]
      [Some bq -> (bq-head bq)]) : (Option Int) -> (Some 4))
