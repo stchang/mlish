@@ -38,18 +38,18 @@
    [Var j -> (tup i (Var j))]
    [Lambda j e ->
     (match (simpl-aux (subst e j (Var i)) (+ i 1)) with
-     [k e2 ->
+     [k, e2 ->
       (tup k (Lambda i e2))])]
    [App e1 e2 ->
     (match (simpl-aux e1 i) with
-     [j e1 ->
+     [j, e1 ->
       (match (simpl-aux e2 j) with
-       [k e2 ->
+       [k, e2 ->
         (tup k (App e1 e2))])])]))
 
 (define (simpl [e : Λ] → Λ)
   (match (simpl-aux e 0) with
-   [i e2 -> e2]))
+   [(i, e2) -> e2]))
 
 (define (eval [e : Λ] → Λ)
   (match e with
@@ -61,7 +61,7 @@
      [App e1 e2 -> (Var -2)]
      [Lambda i e ->
       (match (tup 0 (eval e2)) with
-       [zero v2 ->
+       [zero, v2 ->
         (eval (subst e i (subst v2 i (Var (+ (fresh e) (fresh v2))))))])])]))
 
 ;; -----------------------------------------------------------------------------

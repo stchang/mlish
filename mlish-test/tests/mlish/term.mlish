@@ -138,11 +138,11 @@
    (foldl
      (λ ([m : Msg] [res : (× (List Msg) (List SessionID))])
        (match res with
-        [ms_out ids_out ->
+        [ms_out, ids_out ->
          (match m with
-          [common details ->
+          [common, details ->
            (match common with
-            [id t ->
+            [id, t ->
              (match details with
               [Logon u c -> (if (string=? u user) 
                                 (tup (cons m ms_out) (cons id ids_out))
@@ -155,12 +155,12 @@
                                        res)])])])]))
      (tup nil nil)
      msgs) with
-   [msgs ids -> (reverse msgs)]))
+   [msgs, ids -> (reverse msgs)]))
 
 ;; this is incomplete (and wrong, eg logentry has wrong arity) code in the book
 (define (handle-msg [state : Int] [msg : Msg] -> String)
   (match msg with
-   [common details ->
+   [common, details ->
     (match details with
      [LogEntry i? lmsg -> lmsg]
      [Logon u c -> u]

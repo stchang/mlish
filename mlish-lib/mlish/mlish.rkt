@@ -94,6 +94,7 @@
                     [equal? : (∀ (X) (→ X X Bool))])
  (for-syntax make-extra-info-transformer)
  →/test ?Λ ?∀ (for-syntax ~?∀ ~List List? ×? ~×) ⊔
+ unquote ; for tuple matching, TODO: update reader to get better err msg
  ;; to show user ability to extend the type system, see fasta.mlish
  (for-syntax ~seq ...))
 
@@ -598,6 +599,10 @@
 
 
 ;; match --------------------------------------------------
+(define-syntax unquote
+  (syntax-parser
+    [_ (raise-syntax-error 'comma "cannot be used outside match pattern"
+                           this-syntax)]))
 (define-typed-syntax match #:datum-literals (with)
   ;; e is a tuple
   [(_ e with . clauses) ≫
@@ -607,7 +612,13 @@
    #:with res
    (syntax-parse/typecheck #'τ_e #:datum-literals (-> ::)
     [(~× ~! ty ...) ≫
-     #:with ([x ... -> e_body]) #'clauses
+     #:with (e_body x ...) (syntax-parse #'clauses #:literals (unquote)
+                            [([(~or (x0 (unquote x1) ...) ;with or w/o parens ok
+                                    (~seq x0 (unquote x1) ...)) -> bod])
+                             #'(bod x0 x1 ...)]
+                            [_ (type-error #:src (stx-car #'clauses)
+                                #:msg "Pattern ~a does not match type of scrutinee ~a (maybe missing commas?)"
+                                (stx-car #'clauses) #'τ_e)])
      #:fail-unless (stx-length=? #'(ty ...) #'(x ...))
      "match clause pattern not compatible with given tuple"
      [[x ≫ x- : ty] ... ⊢ (pass-expected e_body match-expr) ≫ e_body- ⇒ ty_body]

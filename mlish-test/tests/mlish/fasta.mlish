@@ -77,9 +77,9 @@
     (for/fold ([cs (tup 0 0.0)])
               ([k+v (in-dict frequency-table)])
       (match cs with
-       [c c. ->
+       [c, c. ->
         (match k+v with
-         [key val ->
+         [key, val ->
           (let* ([c1. (fl+ c. (fl* IM.0 val))]
                  [c1 (inexact->exact (flceiling c1.))]
                  #;[b (char->integer key)])
@@ -128,7 +128,7 @@
   (write-string header out)
   (tup
   (match full-lines+last with
-   [full-lines last ->
+   [full-lines, last ->
    (let loop : Int ([i full-lines] [R R])
      (if (> i IM)
          (begin (write-string C out) (loop (- i IM) R))
@@ -154,7 +154,7 @@
 
 (define res2
   (match res1 with
-   [R str ->   
+   [R, str ->
     (random-fasta ">THREE Homo sapiens frequency\n" (* n 5) HOMOSAPIEN R)]))
 
 (check-type (proj res1 1) : String
@@ -170,7 +170,7 @@
     [res2 (random-fasta ">TWO IUB ambiguity codes\n" (* n 3) IUB 42)]
     [res3
      (match res2 with
-      [R str ->   
+      [R, str ->
        (random-fasta ">THREE Homo sapiens frequency\n" (* n 5) HOMOSAPIEN R)])])
    (string-append res1 (proj res2 1) (proj res3 1))))
 

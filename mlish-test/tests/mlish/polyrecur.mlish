@@ -81,7 +81,7 @@
     (cons x
      (for/fold ([acc nil]) ([p (in-list (flatten rst))])
        (match p with
-        [x y -> (cons x (cons y acc))])))]))
+        [x, y -> (cons x (cons y acc))])))]))
 
 (check-type (flatten (Leaf 1)) : (List Int) -> (list 1))
 (check-type (flatten (Node 1 (Leaf (tup 2 3)))) : (List Int) -> (list 1 2 3))

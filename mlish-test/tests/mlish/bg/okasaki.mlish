@@ -575,7 +575,7 @@
        [None -> (Some (Shallow r))]
        [Some yz ->
         (match yz with
-         [y z ->
+         [y, z ->
           (match (iq-tail m) with
            [None -> None]
            [Some tl ->
@@ -1063,7 +1063,7 @@
        (None -> None)
        (Some udt ->
         (match udt with
-         (a ts ->
+         (a, ts ->
           (match a with
            (Leaf x -> None)
            (Node x t1 t2 ->
@@ -1090,7 +1090,7 @@
      (None -> None)
      (Some xy ->
       (match xy with
-       (x y ->
+       (x, y ->
         (match x with
          (Leaf x -> (Some x))
          (Node a b c -> None)))))))))
@@ -1102,7 +1102,7 @@
      (None -> None)
      (Some xy ->
       (match xy with
-       (x ts2 -> (Some (BL ts2)))))))))
+       (x, ts2 -> (Some (BL ts2)))))))))
 
 (define (bl-lookup (i : Int) (b : (BinaryList A)) → (Option A))
   (match b with
@@ -1285,9 +1285,9 @@
          (Nil -> base-case)
          (∷ w2t2 ts ->
           (match w1t1 with
-           (w1 t1 ->
+           (w1, t1 ->
             (match w2t2 with
-             (w2 t2 ->
+             (w2, t2 ->
               (if (= w1 w2)
                 (SL (∷ (tup (+ 1 (+ w1 w2)) (ANode x t1 t2)) ts))
                 base-case)))))))))))))
@@ -1299,7 +1299,7 @@
      (Nil -> None)
      (∷ w1t1 ts ->
       (match w1t1 with
-       (w1 t1 ->
+       (w1, t1 ->
         (match t1 with
          (ALeaf x ->
           (if (= w1 1)
@@ -1315,7 +1315,7 @@
      (Nil -> None)
      (∷ w1t1 ts ->
       (match w1t1 with
-       (w1 t1 ->
+       (w1, t1 ->
         (match t1 with
          (ALeaf x ->
           (if (= 1 w1)
@@ -1335,7 +1335,7 @@
    (Nil -> None) ;; Bad subscript
    (∷ wt ts ->
     (match wt with
-     (w t ->
+     (w, t ->
       (if (< i w)
         (sb-lookTree w i t)
         (sb-look (- i w) ts)))))))
@@ -1366,7 +1366,7 @@
    (Nil -> None)
    (∷ wt ts ->
     (match wt with
-     (w t ->
+     (w, t ->
       (if (< i w)
         (match (sb-updTree w i y t) with
          (None -> None)
@@ -1492,9 +1492,9 @@
      (None -> None)
      (Some xyps2 ->
       (match xyps2 with
-       (xy ps2 ->
+       (xy, ps2 ->
         (match xy with
-         (x y -> (Some (tup x (ABLOne y ps2))))))))))))
+         (x, y -> (Some (tup x (ABLOne y ps2))))))))))))
 
 (define (abl-fupdate (f : (→ A A)) (i : Int) (bl : (BinaryRAList A)) → (Option (BinaryRAList A)))
   (match bl with
@@ -1508,9 +1508,9 @@
    (ABLZero ps ->
      (let ((f2 (if (= 0 (mod i 2))
                  (λ ([xy : (× A A)])
-                   (match xy with (x y -> (tup (f x) y))))
+                   (match xy with (x, y -> (tup (f x) y))))
                  (λ ([xy : (× A A)])
-                   (match xy with (x y -> (tup x (f y))))))))
+                   (match xy with (x, y -> (tup x (f y))))))))
       (match (abl-fupdate f2 (div i 2) ps) with
         (None -> None)
         (Some z -> (Some (ABLZero z))))))))
@@ -1535,14 +1535,14 @@
    (None -> None)
    (Some xy ->
     (match xy with
-     (x y -> (Some x))))))
+     (x, y -> (Some x))))))
 
 (define (abl-tail (bl : (BinaryRAList A)) → (Option (BinaryRAList A)))
   (match (abl-uncons bl) with
    (None -> None)
    (Some xy ->
     (match xy with
-     (x y -> (Some y))))))
+     (x, y -> (Some y))))))
 
 (define (abl-lookup (i : Int) (bl : (BinaryRAList A)) → (Option A))
   (if (< i 0)
@@ -1561,7 +1561,7 @@
      (None -> None)
      (Some xy ->
       (match xy with
-       (x y ->
+       (x, y ->
         (if (= 0 (mod i 2))
           (Some x)
           (Some y)))))))))

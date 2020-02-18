@@ -4,7 +4,12 @@
 ;; match on tups
 (check-type
     (match (tup 1 2) with
-      [x y -> (+ x y)])
+      [x, y -> (+ x y)])
+    : Int -> 3)
+
+(check-type ; with parens
+    (match (tup 1 2) with
+      [(x, y) -> (+ x y)])
   : Int -> 3)
 
 ;; tests more or less copied from infer-tests.rkt ------------------------------
@@ -303,7 +308,7 @@
 
 (define (None* → (Option A)) None)
 
-(check-type (match (tup 1 2) with [a b -> None]) : (Option Int) -> None)
+(check-type (match (tup 1 2) with [a, b -> None]) : (Option Int) -> None)
 (check-type 
   (match (list 1 2) with 
    [[] -> None]

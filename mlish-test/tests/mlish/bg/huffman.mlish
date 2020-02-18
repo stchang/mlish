@@ -175,7 +175,7 @@
    [⊥ -> ⊥]
    [∷ pair pair* ->
     (match pair with
-     [s i ->
+     [s, i ->
       (adjoin-set (Leaf s i) (make-leaf-set pair*))])]))
 
 (check-type
