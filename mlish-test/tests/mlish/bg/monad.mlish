@@ -1,5 +1,6 @@
 #lang mlish
-(require rackunit/turnstile)
+(require mlish/match2
+	 rackunit/turnstile)
 
 (define-type (Option A)
   [None]

@@ -1,5 +1,6 @@
 #lang mlish+adhoc
-(require rackunit/turnstile)
+(require mlish/match2
+	 rackunit/turnstile)
 
 (define-typeclass (Eq X)
   [== : (→ X X Bool)])

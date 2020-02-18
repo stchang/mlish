@@ -1,5 +1,6 @@
 #lang mlish
 (require mlish/adhoc
+	 mlish/match2
 	 rackunit/turnstile)
 
 ;; like generic.mlish, but imports type classes as a library
