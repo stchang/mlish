@@ -2,7 +2,7 @@
 
 (provide do)
 
-(require (only-in "mlish.rkt" #%app λ Unit)
+(require (only-in "mlish.rkt" #%app λ Unit #%brackets)
          (for-syntax racket/base
                      syntax/parse))
 
@@ -12,7 +12,7 @@
     [(do bind:id body:expr)
      #'body]
     [(do bind:id
-       [x1:id <- m1:expr]
+       [(~optional (~literal #%brackets)) x1:id <- m1:expr]
        rst ...
        body:expr)
      #'(bind
@@ -20,7 +20,7 @@
         (λ (x1)
           (do bind rst ... body)))]
     [(do bind:id
-       [m1:expr]
+       [(~optional (~literal #%brackets)) m1:expr]
        rst ...
        body:expr)
      #'(bind

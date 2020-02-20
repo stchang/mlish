@@ -112,7 +112,7 @@
 
 (check-type (>> (inst bq-head Int) bq-tails-result) : (Option Int) -> (Some 4))
 
-(require (only-in mlish [match orig:match]))
+(require (only-in mlish (match orig:match)))
 ;; check match nested datatype bug
 (check-type
     (orig:match bq-tails-result with

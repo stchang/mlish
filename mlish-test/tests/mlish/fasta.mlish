@@ -18,8 +18,8 @@
 
 (define-type-alias (Dict X Y) (List (× X Y)))
 (require (only-in turnstile define-typed-syntax ≫ ≻))
-(define-typed-syntax (in-dict d) ≫ --- [≻ (in-list d)])
-(define-typed-syntax (dict (~seq k v) ...) ≫ --- [≻ (list (tup k v) ...)])
+(define-typed-syntax (in-dict d) ≫ --- (≻ (in-list d)))
+(define-typed-syntax (dict (~seq k v) ...) ≫ --- (≻ (list (tup k v) ...)))
 
 (define IUB
   (dict #\a 0.27 #\c 0.12 #\g 0.12 #\t 0.27 #\B 0.02

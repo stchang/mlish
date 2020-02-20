@@ -16,7 +16,7 @@
  (only-in "mlish.rkt"
           [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app] [λ mlish:λ]
           [define mlish:define] [begin mlish:begin]
-          →? ?Λ ~?∀ ?∀))
+          #%brackets →? ?Λ ~?∀ ?∀))
 
 (define-type-constructor => #:arity > 0)
 
@@ -180,7 +180,7 @@
 ;;   which is not known to programmers, to make the result slightly more
 ;;   intuitive, we arbitrarily sort the inferred tyvars lexicographically
 (define-typed-syntax define/tc
-  [(_ (f:id [x:id (~datum :) τ] ... 
+  [(_ (f:id [(~optional (~literal #%brackets)) x:id (~datum :) τ] ...
             (~seq #:where TC ...)
             (~or (~datum ->) (~datum →)) τ_out)
       e_body ... e) ≫
@@ -253,11 +253,11 @@
    [⊢ (#%plain-lambda- (mangled-op- ...) body-) ⇒ #,(mk-=>- #'(TC+ ... t-))]])
 
 (define-typed-syntax liftedλ
-  [(_ ([x:id (~datum :) ty] ... #:where TC ...) body) ≫
+  [(_ ([(~optional (~literal #%brackets)) x:id (~datum :) ty] ... #:where TC ...) body) ≫
    #:with (X ...) (compute-tyvars #'(ty ...))
    --------
    [≻ (liftedλ {X ...} ([x : ty] ... #:where TC ...) body)]]
-  [(_ (~and Xs (X ...)) ([x:id (~datum :) ty] ... #:where TC ...) body) ≫
+  [(_ (~and Xs (X ...)) ([(~optional (~literal #%brackets)) x:id (~datum :) ty] ... #:where TC ...) body) ≫
    #:when (brace? #'Xs)
    --------
    [≻ (?Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : ty] ...) body)))]]
@@ -473,8 +473,8 @@
 ;; A TC is a #'(=> subclassTC ... ([generic-op gen-op-ty] ...))
 (define-syntax (define-typeclass stx)
   (syntax-parse stx
-    [(~or (_ TC ... (~datum =>) (Name X ...) [op (~datum :) ty] ...)
-          (~and (_ (Name X ...) [op (~datum :) ty] ...) ; no subclass
+    [(~or (_ TC ... (~datum =>) (Name X ...) [(~optional (~literal #%brackets)) op (~datum :) ty] ...)
+          (~and (_ (Name X ...) [(~optional (~literal #%brackets)) op (~datum :) ty] ...) ; no subclass
                 (~parse (TC ...) #'())))
      #'(begin-
          (define-syntax- op (make-typeclass-op-transformer)) ...
@@ -484,7 +484,7 @@
 
 (define-typed-syntax define-instance
   ;; base type, possibly with subclasses  ------------------------------------
-  [(_ (Name ty ...) [generic-op concrete-op] ...) ≫
+  [(_ (Name ty ...) [(~optional (~literal #%brackets)) generic-op concrete-op] ...) ≫
    #:with (~=> TC ... (~TC [generic-op-expected ty-concrete-op-expected] ...))
           (expand/df #'(Name ty ...))
    #:when (TCs-exist? #'(TC ...) #:ctx this-syntax)
@@ -521,7 +521,7 @@
          (make-variable-like-transformer
           (assign-type #'concrete-op+ #'ty-concrete-op-expected))) ...)]]
   ;; tycon, possibly with subclasses -----------------------------------------
-  [(_ TC ... (~datum =>) (Name ty ...) [generic-op concrete-op] ...) ≫
+  [(_ TC ... (~datum =>) (Name ty ...) [(~optional (~literal #%brackets)) generic-op concrete-op] ...) ≫
    #:with (X ...) (compute-tyvars #'(ty ...))
    ;; ok to drop TCsub ...? I think yes
    ;; - the same TCsubs will be part of TC+,

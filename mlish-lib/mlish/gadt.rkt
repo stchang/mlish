@@ -1,6 +1,6 @@
 #lang turnstile/base
 (require (only-in turnstile/examples/optimize/ext-stlc [→ ext-stlc:→] ⊔)
-         (only-in "mlish.rkt" ?∀ make-extra-info-transformer Bool)
+         (only-in "mlish.rkt" ?∀ make-extra-info-transformer Bool #%brackets)
          (for-syntax racket/set racket/string macrotypes/type-constraints))
 
 (provide define-gadt match-gadt)
@@ -28,7 +28,7 @@
   (syntax-parse stx
     [(_ (Name:id X:id ...)
         ;; TODO: validate these tys
-        [C:id (~datum ::) ty_arg ... (~datum ->) ty_out] ...)
+        [(~optional (~literal #%brackets)) C:id (~datum ::) ty_arg ... (~datum ->) ty_out] ...)
      #:with n #`#,(stx-length #'(X ...))
      #:with (StructName ...) (generate-temporaries #'(C ...))
      #:with ((fld ...) ...) (stx-map generate-temporaries #'((ty_arg ...) ...))
@@ -81,7 +81,7 @@
                   (add-constraints #'Xs null (list (list #'τ_e #'τ_out))))])
            (stx-cdr (get-extra-info #'τ_e))) ; drop leading #%app
    ;; check exhaustiveness
-   #:with ([Clause/all:id . _] ...) #'clauses
+   #:with ([(~optional (~literal #%brackets)) Clause/all:id . _] ...) #'clauses
    #:with ((_ (_ Cons/all) . _) ...) #'(info/unordered ...)
    #:fail-unless (subset? (syntax->datum #'(Cons/all ...))
                           (syntax->datum #'(Clause/all ...)))
@@ -99,7 +99,7 @@
           (stx-filter (lambda (x) x)
             (stx-map ; ok to compare symbols since clause names can't be rebound
              (syntax-parser
-               [(Cl:id . _)
+               [((~optional (~literal #%brackets)) Cl:id . _)
                 (let ([inf
                        (stx-findf
                         (syntax-parser
@@ -108,7 +108,7 @@
                   (if inf (list this-syntax inf) #f))])
              #'clauses))
    ;; destructure clause
-   #:with ([Clause:id x:id ... (~datum ->) clause-bod] ...) #'(clause ...)
+   #:with ([(~optional (~literal #%brackets)) Clause:id x:id ... (~datum ->) clause-bod] ...) #'(clause ...)
    ;; destructure info
    #:with ([_ _ _ Cons? [_ acc τ] ... τ_out] ...) #'(einfo ...)
    ;; unify type of match target (τ_e) with matched constructor (τ_out)

@@ -104,7 +104,7 @@
          [ths (map (λ ([c : Color]) (creature c ch-meet ch-res)) inits)])
     (map (λ ([c : Color]) (channel-get ch-res)) inits)))
 
-(define res1 (go 100 (list Blue Red Yellow)))
+(define res1 (go 100 [Blue, Red, Yellow]))
 
 (define (check-total [r : (List Result)] [remaining : Int] -> Bool)
   (match r with
@@ -117,7 +117,7 @@
 
 (define res2 
   (map (λ ([x : Result]) (proj x 0))
-       (go 1000 (list Blue Red Yellow Red Yellow Blue))))
+       (go 1000 [Blue, Red, Yellow, Red, Yellow, Blue])))
 (check-type res2 : (List Int))
 (define (≤1000 [x : Int] -> Bool) (<= x 1000))
 (define (andmap [p? : (→ X Bool)] [xs : (List X)] → Bool)

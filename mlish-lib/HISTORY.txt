@@ -8,3 +8,6 @@ Revision history for mlish
 
 0.2.2 (2020-02-18)
 - change match tuple pattern to same as match2
+
+0.3 (2020-02-10)
+- give brackets semantic meaning, as literal lists

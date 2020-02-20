@@ -3,7 +3,7 @@
 (provide match)
 
 (require (only-in racket/match [match match-])
-         (only-in "mlish.rkt" tup cons nil list ~× ×? ~List List? ⊔))
+         (only-in "mlish.rkt" #%brackets tup cons nil list ~× ×? ~List List? ⊔))
 
 (begin-for-syntax
   (define (get-ctx pat ty)
@@ -196,7 +196,7 @@
   [(_ e with . clauses) ≫
    #:fail-unless (not (null? (syntax->list #'clauses))) "no clauses"
    [⊢ e ≫ e- ⇒ τ_e]
-   #:with ([(~seq p ...) -> e_body] ...) #'clauses
+   #:with ([(~optional (~literal #%brackets)) (~seq p ...) -> e_body] ...) #'clauses
    #:with (pat ...) (stx-map ; use brace to indicate root pattern
                      (lambda (ps) (syntax-parse ps [(pp ...) (syntax/loc this-syntax {pp ...})]))
                      #'((p ...) ...))

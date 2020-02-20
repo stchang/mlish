@@ -52,13 +52,13 @@
    [nil -> #f]
    [y :: ys -> (or (== x y) (member? x ys))]))
 
-(check-type (member? 1 nil) : Bool -> #f)
-(check-type (member? 1 (list 2)) : Bool -> #f)
-(check-type (member? 1 (list 2 1)) : Bool -> #t)
-(typecheck-fail (member? "1" (list 1))) ; TODO: fix err msg
-(check-type (member? "1" nil) : Bool -> #f)
-(check-type (member? "1" (list "2")) : Bool -> #f)
-(check-type (member? "1" (list "2" "1")) : Bool -> #t)
+(check-type (member? 1 []) : Bool -> #f)
+(check-type (member? 1 [2]) : Bool -> #f)
+(check-type (member? 1 [2,1]) : Bool -> #t)
+(typecheck-fail (member? "1" [1])) ; TODO: fix err msg
+(check-type (member? "1" []) : Bool -> #f)
+(check-type (member? "1" ["2"]) : Bool -> #f)
+(check-type (member? "1" ["2", "1"]) : Bool -> #t)
 
 ;; TODO?: fix name clash of generic op and concrete op
 (define-typeclass (Ord X)
@@ -212,7 +212,7 @@
 ;; should somehow indicate that the two values are not equal because types differ?
 (typecheck-fail (== (nil {Int}) (nil {Bool})))
 ;; nil and non-nil
-(check-type (== (nil {Int}) (list 1)) : Bool -> #f)
+(check-type (== (nil {Int}) [1]) : Bool -> #f)
 (check-type (== (nil {Int}) (cons 1 nil)) : Bool -> #f)
 (check-type (== (nil {Int}) (cons 1 (cons 2 nil))) : Bool -> #f)
 ;; non-nil and nil
@@ -220,9 +220,9 @@
 (check-type (== (cons 1 nil) (nil {Int})) : Bool -> #f)
 (check-type (== (cons 1 (cons 2 nil)) (nil {Int})) : Bool -> #f)
 ;; non-nil and non-nil
-(check-type (== (list 1) (list 1)) : Bool -> #t)
-(check-type (== (cons 1 nil) (list 1)) : Bool -> #t)
-(check-type (== (list 1) (cons 1 nil)) : Bool -> #t)
+(check-type (== [1] [1]) : Bool -> #t)
+(check-type (== (cons 1 []) (list 1)) : Bool -> #t)
+(check-type (== (list 1) (cons 1 [])) : Bool -> #t)
 (check-type (== (list 1) (list 1 2)) : Bool -> #f)
 (check-type (== (list 1 2) (list 1)) : Bool -> #f)
 (check-type (== (list 1 2) (list 1 2)) : Bool -> #t)
@@ -233,19 +233,19 @@
   (== l1 l2))
 
 (check-type (list-eq1 (nil {Int}) (nil {Int})) : Bool -> #t)
-(check-type (list-eq1 (nil {Int}) (list 1)) : Bool -> #f)
-(check-type (list-eq1 (list 1) (nil {Int})) : Bool -> #f)
-(check-type (list-eq1 (list 1) (list 1)) : Bool -> #t)
-(check-type (list-eq1 (list 1) (list 2)) : Bool -> #f)
-(check-type (list-eq1 (list 1) (list 1 2)) : Bool -> #f)
+(check-type (list-eq1 (nil {Int}) [1]) : Bool -> #f)
+(check-type (list-eq1 [1] (nil {Int})) : Bool -> #f)
+(check-type (list-eq1 [1] [1]) : Bool -> #t)
+(check-type (list-eq1 [1] [2]) : Bool -> #f)
+(check-type (list-eq1 [1] [1,2]) : Bool -> #f)
 
-(check-type (member? (list 1) (list (list 1))) : Bool -> #t)
-(check-type (member? (list 1) (list (list 2))) : Bool -> #f)
-(check-type (member? (list 1) (list (list 2) (list 1))) : Bool -> #t)
+(check-type (member? [1] [[1]]) : Bool -> #t)
+(check-type (member? [1] [[2]]) : Bool -> #f)
+(check-type (member? [1] [[2],[1]]) : Bool -> #t)
 
 (define (id-fn2 [xs : (List X)] #:where (Eq X) -> (List X)) xs)
 (typecheck-fail (id-fn2 (list #f)) #:with-msg "\\(Eq Bool\\) instance undefined")
-(check-type (id-fn2 (list 1)) : (List Int) -> (list 1))
+(check-type (id-fn2 [1]) : (List Int) -> [1])
  
 ;; TODO: #:where TC, where TC has a tycon, like #:where (List X)
 ;; still doesnt work I dont think
@@ -256,10 +256,10 @@
 ;; 2016-05-25: Done. see memsq2
 (define (memsq? [x : X] [xs : (List X)] #:where (Eq X) (Num X) -> Bool)
   (member? (square x) xs))
-(check-type (memsq? 1 (list 1)) : Bool -> #t)
-(check-type (memsq? 2 (list 2)) : Bool -> #f)
-(check-type (memsq? 2 (list 3 4)) : Bool -> #t)
-(typecheck-fail (memsq? (list 1) (list (list 1)))
+(check-type (memsq? 1 [1]) : Bool -> #t)
+(check-type (memsq? 2 [2]) : Bool -> #f)
+(check-type (memsq? 2 [3,4]) : Bool -> #t)
+(typecheck-fail (memsq? [1] [[1]])
   #:with-msg "\\(Num \\(List Int\\)\\) instance undefined")
 
 

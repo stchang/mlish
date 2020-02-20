@@ -57,8 +57,8 @@
 
 ;; Specific sequences:
 (check-type
-    (for/list ([seq (in-list (list "GGT" "GGTA" "GGTATT" 
-                                   "GGTATTTTAATT" "GGTATTTTAATTTATAGT"))])
+ (for/list ([seq (in-list ["GGT", "GGTA", "GGTATT",
+                           "GGTATTTTAATT", "GGTATTTTAATTTATAGT"])])
       (let ([table (all-counts (string-length seq) dna)])
         (if (hash-has-key? table seq)
             (deref (hash-ref table seq))

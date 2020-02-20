@@ -50,7 +50,7 @@
 (define (alias-test2 [in : A] -> (Read-Result A))
   (ok (tup in nil)))
 (define (alias-test3 [in : A] -> (Read-Result A))
-  (ok (tup in (list #\a #\b #\c))))
+  (ok (tup in [#\a, #\b, #\c])))
 
 (check-type alias-test2 : (→/test A (Result (× A (List Char)) String)))
 (check-type alias-test2 : (→/test A (Read-Result A)))

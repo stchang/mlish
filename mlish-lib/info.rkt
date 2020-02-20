@@ -13,4 +13,4 @@
 (define pkg-desc "MLish: an extensible ML language.")
 (define pkg-authors '(stchang))
 
-(define version "0.2.2")
+(define version "0.3")
