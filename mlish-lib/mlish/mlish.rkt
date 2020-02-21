@@ -629,123 +629,183 @@
                            "can't be used outside list literal or match pattern"
                            this-syntax)]))
 
-;; TODO: define match-clause stx class
-#;(begin-for-syntax
-  (define-syntax-class match-clause
-    (pattern [(~optional (~literal #%brackets)) pat (~datum ->) body])))
+;; helper stx classes for match
+(begin-for-syntax
+  ;; matching tuples --------------------
+  (define-splicing-syntax-class tup-match-pat
+    #:description "tuple match pattern"
+    #:literals (unquote) #:attributes ([x 1])
+    (pattern (x0 (unquote x1) ...) #:with (x ...) #'(x0 x1 ...)    )
+    (pattern (~seq x0 (unquote x1) ...) #:with (x ...) #'(x0 x1 ...))
+    (pattern pat
+             #:and (~fail
+                    (format
+                     "Invalid pattern for tuple type (maybe missing commas?): ~a"
+                     (stx->datum #'pat)))
+             #:with (x ...) #'()))
+
+  (define-syntax-class (tup-match-clauses τ_e)
+    #:description "tuple match clauses"
+    #:auto-nested-attributes ; inherit (x ...) attrs from tup-match-pat
+    ;; #:attributes: ([x 1] body) (commented bc using auto-nested-attrs)
+    #:datum-literals (->) #:literals (#%brackets)
+    (pattern ([(~optional #%brackets) :tup-match-pat -> body]) ; only 1 clause
+             #:with (~× ty0 ...) τ_e
+             #:fail-unless (stx-length=? #'(ty0 ...) #'(x ...))
+             (format "match tuple pattern does not match type ~a"
+                     (type->str τ_e))))
+
+  (define-template-metafunction $mk-tup-match-term
+    (syntax-parser
+      [(_ e- (x- ...) body-)
+       #:with z (generate-temporary)
+       #:with (acc ...)
+              (for/list ([i (stx-length #'(x- ...))])
+                #`(#%plain-lambda- (s) (#%plain-app- list-ref- s '#,i)))
+       #`(let-values- ([(z) e-])
+           (let-values- ([(x-) (#%plain-app- acc z)] ...) body-))]))
+
+  ;; matching lists --------------------
+  (define-splicing-syntax-class lst-match-pat
+    #:description "list match pattern"
+    #:attributes ([x 1] xs rst)
+    (pattern (~and xs [(~optional (~literal #%brackets)) x ...])
+             #:with rst (generate-temporary))
+    (pattern (~seq (~seq x (~datum ::)) ... rst:id)
+             #:with xs #'()))
+
+  (define-syntax-class lst-match-clauses #:description "list match clauses"
+    #:auto-nested-attributes ; inherit x, xs, rst attrs from lst-match-pat
+    ;; #:attributes ([x 2] [xs 1] [rst 1] [body 1]) (commented bc using auto-nested-attrs)
+    #:datum-literals (->) #:literals (#%brackets)
+    (pattern ([(~optional #%brackets) :lst-match-pat -> body] ...)
+             #:fail-unless (stx-ormap
+                            (λ (xx) (or (and (brack? xx) (= 1 (stx-length xx)))
+                                        (zero? (stx-length xx))))
+                            #'(xs ...))
+                           "match: missing empty list case"
+             #:fail-unless (not (and (stx-andmap brack? #'(xs ...))
+                                     (= 1 (stx-length #'(xs ...)))))
+             "match: missing non-empty list case"))
+
+  (define-template-metafunction $mk-lst-match-term
+    (syntax-parser
+      [(_ e- (xs ...) ((x- ...) ...) (rst- ...) (body- ...))
+       #:with z (generate-temporary)
+       #:with ((pred? (acc1 ...) acc2) ...)
+       (for/list ([xs (in-stx-list #'(xs ...))] ; wrong len bc of #%brackets
+                  [xs- (in-stx-list #'((x- ...) ...))])
+         (define len (stx-length xs-))
+         (define op (if (brack? xs) #'=- #'>=-))
+         (list
+          #`(#%plain-lambda- (lst)   ; pred?
+              (#%plain-app- #,op (#%plain-app- length- lst) '#,len))
+          (for/list ([i len])        ; (acc1 ...)
+            #`(#%plain-lambda- (lst)
+                (#%plain-app- list-ref- lst '#,i)))
+          #`(#%plain-lambda- (lst)   ; acc2
+              (#%plain-app- list-tail- lst '#,len))))
+       #`(let-values- ([(z) e-])
+           (cond-
+            [(#%plain-app- pred? z)
+             (let-values- ([(x-) (#%plain-app- acc1 z)] ...
+                           [(rst-) (#%plain-app- acc2 z)])
+               body-)] ...))]))
+
+  ;; matching user-defined datatpyes (variants) --------------------
+  (define-splicing-syntax-class var-match-pat
+    #:description "datatype match pattern"
+    #:attributes (Clause [x 1] guard)
+    (pattern (~seq Clause:id x:id ...
+                   (~optional (~seq #:when guard)
+                     #:defaults ([guard #'(ext-stlc:#%datum . #t)])))))
+
+  (define-syntax-class (var-match-clauses τ_e) #:description "datatype match clauses"
+    #:auto-nested-attributes ; inherits Clause (x ...) guard from var-match-pat
+    ;; #:attributes ([x 2] [guard 1] [body 1] [Cons? 1] [acc 2] [τ 2]) (commented bc using auto-nested-attrs)
+    #:datum-literals (->) #:literals (#%brackets)
+    ; # of clauses may be > len #'info, due to guards
+    (pattern ([(~optional #%brackets) :var-match-pat -> body] ...)
+             #:with info-body (get-extra-info τ_e) ; TODO: check #f?
+             #:with (_ (_ (_ ConsAll) . _) ...) #'info-body
+             #:do[(define Clause-symbs (syntax->datum #'(Clause ...)))]
+             #:fail-unless (set=? Clause-symbs (syntax->datum #'(ConsAll ...)))
+             (type-error #:src #'match-expr
+                         #:msg (string-append
+                                "match: clauses not exhaustive; missing: "
+                                (string-join
+                                 (map symbol->string
+                                      (set-subtract
+                                       (syntax->datum #'(ConsAll ...))
+                                       Clause-symbs))
+                                 ", ")))
+             #:with ((_ _ _ Cons? [_ acc τ] ...) ...)
+                    (map ; ok to compare symbols bc clause names can't be rebound
+                     (λ (Cl)
+                       (stx-findf
+                        (syntax-parser
+                          [(_ 'C . _) (equal? Cl (syntax->datum #'C))])
+                        (stx-cdr #'info-body))) ; drop leading #%app
+                     Clause-symbs)))
+
+  (define-template-metafunction $mk-var-match-term
+    (syntax-parser
+      [(_ e- (Cons? ...) ((acc ...) ...) ((x- ...) ...) (guard- ...) (body- ...))
+       #:with z (generate-temporary) ; dont duplicate eval of test expr
+       #'(let-values- ([(z) e-])
+           (cond-
+            [(and- (#%plain-app- Cons? z)
+                   (let-values- ([(x-) (#%plain-app- acc z)] ...) guard-))
+             (let-values- ([(x-) (#%plain-app- acc z)] ...) body-)] ...))])))
 
 (define-typed-syntax match #:datum-literals (with)
-  [(_ e with . clauses) ≫
-   #:fail-unless (not (null? (syntax->list #'clauses))) "no clauses"
+  [(_ e with c ...+) ⇐ τ_expected ≫
    [⊢ e ≫ e- ⇒ τ_e]
-   #:with match-expr this-syntax
-   #:with res
-   (syntax-parse/typecheck #'τ_e #:datum-literals (-> ::)
-    ;; e is a tuple --------------------
-    [(~× ~! ty ...) ≫
-     #:with (e_body x ...) (syntax-parse #'clauses #:literals (unquote)
-                            [([(~optional (~literal #%brackets))
-                               (~or (x0 (unquote x1) ...) ;with or w/o parens ok
-                                    (~seq x0 (unquote x1) ...)) -> bod])
-                             #'(bod x0 x1 ...)]
-                            [_ (type-error #:src (stx-car #'clauses)
-                                #:msg "Pattern ~a does not match type of scrutinee ~a (maybe missing commas?)"
-                                (stx-car #'clauses) #'τ_e)])
-     #:fail-unless (stx-length=? #'(ty ...) #'(x ...))
-     "match clause pattern not compatible with given tuple"
-     [[x ≫ x- : ty] ... ⊢ (pass-expected e_body match-expr) ≫ e_body- ⇒ ty_body]
-     #:with (acc ...) (for/list ([(a i) (in-indexed (syntax->list #'(x ...)))])
-                        #`(#%plain-lambda- (s) (#%plain-app- list-ref- s #,(datum->syntax #'here i))))
-     #:with z (generate-temporary)
-     --------
-     [⊢ (let-values- ([(z) e-])
-          (let-values- ([(x-) (#%plain-app- acc z)] ...) e_body-)) ⇒ ty_body]]
-    ;; e is a list --------------------
-    [(~List ~! ty) ≫
-     #:with ([(~optional (~literal #%brackets))
-              (~or* (~and xs [(~optional (~literal #%brackets)) x ...]
-                          (~parse rst (generate-temporary)))
-                    (~seq (~seq x ::) ... rst:id (~parse xs #'())))
-              -> e_body] ...+)
-     #'clauses
-     #:fail-unless (stx-ormap 
-                    (lambda (xx) (or (and (brack? xx) (= 1 (stx-length xx)))
-                                     (zero? (stx-length xx))))
-                    #'(xs ...))
-     "match: missing empty list case"
-     #:fail-unless (not (and (stx-andmap brack? #'(xs ...))
-                             (= 1 (stx-length #'(xs ...)))))
-     "match: missing non-empty list case"
-     [[x ≫ x- : ty] ... [rst ≫ rst- : τ_e]
-      ⊢ (pass-expected e_body match-expr) ≫ e_body- ⇒ ty_body] ...
-     #:with (len ...) (stx-map (lambda (p) #`#,(stx-length p)) #'((x ...) ...))
-     #:with (lenop ...) (stx-map (lambda (p) (if (brack? p) #'=- #'>=-)) #'(xs ...))
-     #:with (pred? ...) (stx-map
-                         (lambda (l lo) #`(#%plain-lambda- (lst) (#,lo (#%plain-app- length- lst) #,l)))
-                         #'(len ...) #'(lenop ...))
-     #:with ((acc1 ...) ...) (stx-map 
-                              (lambda (xs)
-                                (for/list ([(x i) (in-indexed (syntax->list xs))])
-                                  #`(#%plain-lambda- (lst) (#%plain-app- list-ref- lst #,(datum->syntax #'here i)))))
-                              #'((x ...) ...))
-     #:with (acc2 ...) (stx-map (lambda (l) #`(#%plain-lambda- (lst) (#%plain-app- list-tail- lst #,l))) #'(len ...))
-     --------
-     [⊢ (let-values- ([(z) e-])
-          (cond-
-           [(#%plain-app- pred? z)
-            (let-values- ([(x-) (#%plain-app- acc1 z)] ...
-                          [(rst-) (#%plain-app- acc2 z)])
-              e_body-)] ...))
-        ⇒ (⊔ ty_body ...)]]
-    ;; e is a variant --------------------
-    [_ ≫
-     #:with t_expect (get-expected-type #'match-expr) ; propagate inferred type
-     #:with ([(~optional (~literal #%brackets)) Clause:id x:id ...
-                        (~optional (~seq #:when e_guard) #:defaults ([e_guard #'(ext-stlc:#%datum . #t)]))
-                        -> e_c_un] ...+) ; un = unannotated with expected ty
-     #'clauses
-     ;; length #'clauses may be > length #'info, due to guards
-     #:with info-body (get-extra-info #'τ_e)
-     #:with (_ (_ (_ ConsAll) . _) ...) #'info-body
-     #:do[(define Clause-symbs (syntax->datum #'(Clause ...)))]
-     #:fail-unless (set=? Clause-symbs
-                          (syntax->datum #'(ConsAll ...)))
-     (type-error #:src #'match-expr
-                 #:msg (string-append
-                        "match: clauses not exhaustive; missing: "
-                        (string-join      
-                         (map symbol->string
-                              (set-subtract 
-                               (syntax->datum #'(ConsAll ...))
-                               Clause-symbs
-                               #;(syntax->datum #'(Clause ...))))
-                         ", ")))
-     #:with ((_ _ _ Cons? [_ acc τ] ...) ...)
-     (map ; ok to compare symbols since clause names can't be rebound
-      (lambda (Cl) 
-        (stx-findf
-         (syntax-parser
-           [(_ 'C . _) (equal? Cl (syntax->datum #'C))])
-         (stx-cdr #'info-body))) ; drop leading #%app
-      Clause-symbs #;(syntax->datum #'(Clause ...)))
-     ;; this commented block experiments with expanding to unsafe ops
-     ;; #:with ((acc ...) ...) (stx-map 
-     ;;                         (lambda (accs)
-     ;;                          (for/list ([(a i) (in-indexed (syntax->list accs))])
-     ;;                            #`(lambda (s) (unsafe-struct*-ref s #,(datum->syntax #'here i)))))
-     ;;                         #'((acc-fn ...) ...))
-     #:with (e_c ...+) (stx-map (lambda (ec) #`(pass-expected #,ec match-expr)) #'(e_c_un ...))
-     [[x ≫ x- : τ] ... ⊢ [e_guard ≫ e_guard- ⇐ Bool] [e_c ≫ e_c- ⇒ τ_ec]] ...
-     #:with z (generate-temporary) ; dont duplicate eval of test expr
-     --------
-     [⊢ (let-values- ([(z) e-])
-              (cond-
-               [(and- (#%plain-app- Cons? z) 
-                      (let-values- ([(x-) (#%plain-app- acc z)] ...) e_guard-))
-                (let-values- ([(x-) (#%plain-app- acc z)] ...) e_c-)] ...))
-        ⇒ (⊔ τ_ec ...)]])
+   [⊢ (match/ty/expected τ_e e- c ...) ≫ m- ⇐ τ_expected]
    ------
-   [≻ res]])
+   [⊢ m-]]
+  [(_ e with c ...+) ≫
+   [⊢ e ≫ e- ⇒ τ_e]
+   ------
+   [≻ (match/ty τ_e e- c ...)]])
+
+(define-typed-syntax match/ty/expected
+  ;; e is a tuple --------------------
+  [(_ (~and (~× ty ...) τ_e) ~! e- . (~var || (tup-match-clauses #'τ_e))) ⇐ τ_expected ≫
+   [[x ≫ x- : ty] ... ⊢ body ≫ body- ⇐ τ_expected]
+   --------
+   [⊢ ($mk-tup-match-term e- (x- ...) body-)]]
+  ;; e is a list --------------------
+  [(_ (~and (~List ty) τ_e) ~! e- . :lst-match-clauses) ⇐ τ_expected ≫
+   [[x ≫ x- : ty] ... [rst ≫ rst- : τ_e] ⊢ body ≫ body- ⇐ τ_expected] ...
+   --------
+   [⊢ ($mk-lst-match-term e- (xs ...) ((x- ...) ...) (rst- ...) (body- ...))]]
+  ;; e is a variant --------------------
+  [(_ τ_e ~! e- . (~var || (var-match-clauses #'τ_e))) ⇐ τ_expected ≫
+   [[x ≫ x- : τ] ... ⊢ [guard ≫ guard- ⇐ Bool] [body ≫ body- ⇐ τ_expected]] ...
+   --------
+   [⊢ ($mk-var-match-term
+       e- (Cons? ...) ((acc ...) ...) ((x- ...) ...) (guard- ...) (body- ...))]])
+
+(define-typed-syntax match/ty ; no expected type
+  ;; e is a tuple --------------------
+  [(_ (~and (~× ty ...) τ_e) ~! e- . (~var || (tup-match-clauses #'τ_e))) ≫
+   [[x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ τ_body]
+   --------
+   [⊢ ($mk-tup-match-term e- (x- ...) body-) ⇒ τ_body]]
+  ;; e is a list --------------------
+  [(_ (~and (~List ty) τ_e) ~! e- . :lst-match-clauses) ≫
+   [[x ≫ x- : ty] ... [rst ≫ rst- : τ_e] ⊢ body ≫ body- ⇒ τ_body] ...
+   --------
+   [⊢ ($mk-lst-match-term e- (xs ...) ((x- ...) ...) (rst- ...) (body- ...))
+      ⇒ (⊔ τ_body ...)]]
+  ;; e is a variant --------------------
+  [(_ τ_e ~! e- . (~var || (var-match-clauses #'τ_e))) ≫
+   [[x ≫ x- : τ] ... ⊢ [guard ≫ guard- ⇐ Bool] [body ≫ body- ⇒ τ_body]] ...
+   --------
+   [⊢ ($mk-var-match-term
+       e- (Cons? ...) ((acc ...) ...) ((x- ...) ...) (guard- ...) (body- ...))
+      ⇒ (⊔ τ_body ...)]])
 
 ; special arrow that computes free vars; for use with tests
 ; (because we can't write explicit forall
