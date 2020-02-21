@@ -196,7 +196,7 @@
   [(_ e with . clauses) ≫
    #:fail-unless (not (null? (syntax->list #'clauses))) "no clauses"
    [⊢ e ≫ e- ⇒ τ_e]
-   #:with ([(~optional (~literal #%brackets)) (~seq p ...) -> e_body] ...) #'clauses
+   #:with ([(~optional (~literal #%brackets)) p ... -> e_body] ...) #'clauses
    #:with (pat ...) (stx-map ; use brace to indicate root pattern
                      (lambda (ps) (syntax-parse ps [(pp ...) (syntax/loc this-syntax {pp ...})]))
                      #'((p ...) ...))

@@ -16,7 +16,7 @@
  (only-in "mlish.rkt"
           [~→ ~mlish:→] [→ mlish:→] [#%app mlish:#%app] [λ mlish:λ]
           [define mlish:define] [begin mlish:begin]
-          #%brackets →? ?Λ ~?∀ ?∀))
+          #%brackets x+τ →? ?Λ ~?∀ ?∀))
 
 (define-type-constructor => #:arity > 0)
 
@@ -180,9 +180,7 @@
 ;;   which is not known to programmers, to make the result slightly more
 ;;   intuitive, we arbitrarily sort the inferred tyvars lexicographically
 (define-typed-syntax define/tc
-  [(_ (f:id [(~optional (~literal #%brackets)) x:id (~datum :) τ] ...
-            (~seq #:where TC ...)
-            (~or (~datum ->) (~datum →)) τ_out)
+  [(_ (f:id :x+τ ... (~seq #:where TC ...) (~or (~datum ->) (~datum →)) τ_out)
       e_body ... e) ≫
    #:with (~and Ys (Y ...)) (compute-tyvars #'(τ ... τ_out))
    #:with f- (add-orig (generate-temporary #'f) #'f)
@@ -253,14 +251,14 @@
    [⊢ (#%plain-lambda- (mangled-op- ...) body-) ⇒ #,(mk-=>- #'(TC+ ... t-))]])
 
 (define-typed-syntax liftedλ
-  [(_ ([(~optional (~literal #%brackets)) x:id (~datum :) ty] ... #:where TC ...) body) ≫
-   #:with (X ...) (compute-tyvars #'(ty ...))
+  [(_ (:x+τ ... #:where TC ...) body) ≫
+   #:with (X ...) (compute-tyvars #'(τ ...))
    --------
-   [≻ (liftedλ {X ...} ([x : ty] ... #:where TC ...) body)]]
-  [(_ (~and Xs (X ...)) ([(~optional (~literal #%brackets)) x:id (~datum :) ty] ... #:where TC ...) body) ≫
+   [≻ (liftedλ {X ...} ([x : τ] ... #:where TC ...) body)]]
+  [(_ (~and Xs (X ...)) (:x+τ ... #:where TC ...) body) ≫
    #:when (brace? #'Xs)
    --------
-   [≻ (?Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : ty] ...) body)))]]
+   [≻ (?Λ (X ...) (BindTC (TC ...) (ext-stlc:λ ([x : τ] ...) body)))]]
   [(_ . rst) ≫ --- [≻ (mlish:λ . rst)]])
 
 ;; #%app --------------------------------------------------
@@ -471,16 +469,15 @@
 ;; TODO: make this a formal type?
 ;; - or at least define a pattern expander - DONE 2016-05-01
 ;; A TC is a #'(=> subclassTC ... ([generic-op gen-op-ty] ...))
-(define-syntax (define-typeclass stx)
-  (syntax-parse stx
-    [(~or (_ TC ... (~datum =>) (Name X ...) [(~optional (~literal #%brackets)) op (~datum :) ty] ...)
-          (~and (_ (Name X ...) [(~optional (~literal #%brackets)) op (~datum :) ty] ...) ; no subclass
-                (~parse (TC ...) #'())))
+(define-syntax define-typeclass
+  (syntax-parser
+    [(~or (_ TC ... (~datum =>) (Name X ...) :x+τ ...)
+          (~and (_ (Name X ...) :x+τ ...) (~parse (TC ...) #'()))) ; no subclass
      #'(begin-
-         (define-syntax- op (make-typeclass-op-transformer)) ...
+         (define-syntax- x (make-typeclass-op-transformer)) ...
          (define-syntax- Name
            (make-typeclass-transformer
-            #'(TC ...) #'(#%plain-app- (#%plain-app- 'op ty) ...) #'(X ...) #'Name)))]))
+            #'(TC ...) #'(#%plain-app- (#%plain-app- 'x τ) ...) #'(X ...) #'Name)))]))
 
 (define-typed-syntax define-instance
   ;; base type, possibly with subclasses  ------------------------------------

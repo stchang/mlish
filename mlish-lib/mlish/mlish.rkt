@@ -97,7 +97,7 @@
  →/test ?Λ ?∀ (for-syntax ~?∀ ~List List? ×? ~×) ⊔
  unquote ; for tuple matching, TODO: update reader to get better err msg
  ;; to show user ability to extend the type system, see fasta.mlish
- (for-syntax ~seq ...))
+ (for-syntax ~seq ... x+τ))
 
 (require
  (postfix-in - racket/fixnum)
@@ -131,15 +131,23 @@
       [(?Λ (X ...) body)
        #'(Λ (X ...) body)])))
 
+;; some syntax classes to help with brackets
+(begin-for-syntax
+  (define-syntax-class x+τ #:description "type-annotated binder"
+    (pattern [(~optional (~literal #%brackets)) x:id (~datum :) τ]
+             #:with x+τ #'[x : τ])) ; drop #%brackets
+  (define-syntax-class x+e #:description "a let-like binder"
+    (pattern [(~optional (~literal #%brackets)) x:id e]
+             #:with x+e #'[x e])) ; drop #%brackets
+  (define-syntax-class brack
+    (pattern [(~optional (~literal #%brackets)) . items])))
+
 (define-syntax ××
-  (syntax-parser
-    [(_ [(~optional (~literal #%brackets)) f ...] ...)
-     #'(× [f ...] ...)])) ; record from stlc+reco+var
+  (syntax-parser [(_ b:brack ...) #'(× b.items ...)])) ; record from stlc+reco+var
 
 (define-syntax rec
   (syntax-parser
-    [(_ [(~optional (~literal #%brackets)) f ...] ...)
-     #'(tup [f ...] ...)])) ; record from stlc+reco+var
+    [(_ b:brack ...) #'(tup b.items ...)])) ; record from stlc+reco+var
 
 ;; literal lists
 (define-syntax #%brackets
@@ -412,8 +420,7 @@
         (define-typed-variable-rename x ≫ x- : τ)
         (define- x- e-))]]
   ; explicit "forall"
-  [(_ Ys (f:id [(~optional (~literal #%brackets)) x:id (~datum :) τ] ... (~or (~datum ->) (~datum →)) τ_out)
-     e_body ... e) ≫
+  [(_ Ys (f:id :x+τ ... (~or (~datum ->) (~datum →)) τ_out) e_body ... e) ≫
    #:when (brace? #'Ys)
    ;; TODO; remove this code duplication
    #:with f- (add-orig (generate-temporary #'f) #'f)
@@ -433,12 +440,11 @@
   [(_ (f:id x:id ...) (~datum :) ty ... (~or (~datum ->) (~datum →)) ty_out . b) ≫
    --------
    [≻ (define (f [x : ty] ... -> ty_out) . b)]]
-  [(_ (f:id [(~optional (~literal #%brackets)) x:id (~datum :) τ] ... (~or (~datum ->) (~datum →)) τ_out)
+  [(_ (f:id :x+τ ... (~or (~datum ->) (~datum →)) τ_out)
      e_body ... e) ≫
    #:with (Y ...) (compute-tyvars #'(τ ... τ_out))
    ---------------
-   [≻ (define {Y ...} (f [x : τ] ... -> τ_out)
-        e_body ... e)]])
+   [≻ (define {Y ...} (f [x : τ] ... -> τ_out) e_body ... e)]])
 
 ;; define-type -----------------------------------------------
 
@@ -481,7 +487,8 @@
                 (~and IdCons:id
                       (~parse (Cons [fld (~datum :) τ] ...) #'(IdCons)))
                 ; With named fields
-                ((~optional (~literal #%brackets)) Cons [(~optional (~literal #%brackets)) fld (~datum :) τ] ...)
+                (~and ((~optional (~literal #%brackets)) Cons f:x+τ ...)
+                      (~parse ([fld τ] ...) #'([f.x f.τ] ...)))
                 ; Fields not named; generate internal names
                 (~and [(~optional (~literal #%brackets)) Cons τ ...]
                       (~parse (fld ...) (generate-temporaries #'(τ ...)))))))))
@@ -622,14 +629,19 @@
                            "can't be used outside list literal or match pattern"
                            this-syntax)]))
 
+;; TODO: define match-clause stx class
+#;(begin-for-syntax
+  (define-syntax-class match-clause
+    (pattern [(~optional (~literal #%brackets)) pat (~datum ->) body])))
+
 (define-typed-syntax match #:datum-literals (with)
-  ;; e is a tuple --------------------
   [(_ e with . clauses) ≫
    #:fail-unless (not (null? (syntax->list #'clauses))) "no clauses"
    [⊢ e ≫ e- ⇒ τ_e]
    #:with match-expr this-syntax
    #:with res
    (syntax-parse/typecheck #'τ_e #:datum-literals (-> ::)
+    ;; e is a tuple --------------------
     [(~× ~! ty ...) ≫
      #:with (e_body x ...) (syntax-parse #'clauses #:literals (unquote)
                             [([(~optional (~literal #%brackets))
@@ -651,8 +663,9 @@
     ;; e is a list --------------------
     [(~List ~! ty) ≫
      #:with ([(~optional (~literal #%brackets))
-              (~or (~and (~and xs [(~optional (~literal #%brackets)) x ...]) (~parse rst (generate-temporary)))
-                   (~and (~seq (~seq x ::) ... rst:id) (~parse xs #'())))
+              (~or* (~and xs [(~optional (~literal #%brackets)) x ...]
+                          (~parse rst (generate-temporary)))
+                    (~seq (~seq x ::) ... rst:id (~parse xs #'())))
               -> e_body] ...+)
      #'clauses
      #:fail-unless (stx-ormap 
@@ -754,20 +767,20 @@
    [([X ≫ _ :: #%type] ...) ([x ≫ x- : τ_in] ...) ⊢ [body ≫ body- ⇐ (ev/m τ_out)]]
    --------
    [⊢ (#%plain-lambda- (x- ...) body-)]]
-  [(λ ([(~optional (~literal #%brackets)) x : τ_x] ...) body) ⇐ (~?∀ (V ...) (~→ τ_in ... τ_out)) ≫
-   #:with [X ...] (compute-tyvars #'(τ_x ...))
-   #:with ((X- ...) (τ_x-:type ...)) (expands/tvctx #'(τ_x ...) #'(X ...))
+  [(λ (b:x+τ ...) body) ⇐ (~?∀ (V ...) (~→ τ_in ... τ_out)) ≫
+   #:with [X ...] (compute-tyvars #'(b.τ ...))
+   #:with ((X- ...) (τ_x-:type ...)) (expands/tvctx #'(b.τ ...) #'(X ...))
 ;   [[X ≫ X- :: #%type] ... ⊢ [τ_x ≫ τ_x- ⇐ :: #%type] ...]
-   [τ_in τ⊑ τ_x- #:for x] ...
+   [τ_in τ⊑ τ_x- #:for b.x] ...
    ;; TODO is there a way to have λs that refer to ids defined after them?
-   [([V ≫ _ :: #%type] ... [X- ≫ _ :: #%type] ...) ([x ≫ x- : τ_x-] ...) ⊢ body ≫ body- ⇐ τ_out]
+   [([V ≫ _ :: #%type] ... [X- ≫ _ :: #%type] ...) ([b.x ≫ x- : τ_x-] ...) ⊢ body ≫ body- ⇐ τ_out]
    --------
    [⊢ (#%plain-lambda- (x- ...) body-)]]
-  [(λ ([(~optional (~literal #%brackets)) x : τ_x] ...) body) ≫
-   #:with [X ...] (compute-tyvars #'(τ_x ...))
+  [(λ (b:x+τ ...) body) ≫
+   #:with [X ...] (compute-tyvars #'(b.τ ...))
    ;; TODO is there a way to have λs that refer to ids defined after them?
-   [([X ≫ X- :: #%type] ...) ([x ≫ x- : τ_x] ...) ⊢ body ≫ body- ⇒ τ_body]
-   #:with [τ_x* ...] (inst-types/cs #'[X ...] #'([X X-] ...) #'[τ_x ...])
+   [([X ≫ X- :: #%type] ...) ([b.x ≫ x- : b.τ] ...) ⊢ body ≫ body- ⇒ τ_body]
+   #:with [τ_x* ...] (inst-types/cs #'[X ...] #'([X X-] ...) #'[b.τ ...])
    #:with τ_fn (add-orig #'(?∀ (X- ...) (ext-stlc:→ τ_x* ... τ_body))
                          #`(→ #,@(stx-map get-orig #'[τ_x* ...]) #,(get-orig #'τ_body)))
    --------
@@ -926,81 +939,74 @@
    [⊢ (#%plain-app- in-lines- (#%plain-app- open-input-string- e-)) ⇒ : #,(mk-Sequence- (list String+))]])
 
 (define-typed-syntax for
-  [(for ([(~optional (~literal #%brackets)) x:id e]...) b ... body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...)
-    ⊢ [b ≫ b- ⇒ : _] ... [body ≫ body- ⇒ : _]]
+  [(for (s:x+e ...) b ... body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ [b ≫ b- ⇒ _] ... [body ≫ body- ⇒ _]]
    --------
-   [⊢ (for- ([x- e-] ...) b- ... body-) ⇒ : #,Unit+]])
+   [⊢ (for- ([x- e-] ...) b- ... body-) ⇒ #,Unit+]])
 (define-typed-syntax for*
-  [(for* ([(~optional (~literal #%brackets)) x:id e]...) b ... body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...)
-    ⊢ [b ≫ b- ⇒ : _] ... [body ≫ body- ⇒ : _]]
+  [(for* (s:x+e ...) b ... body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ [b ≫ b- ⇒ _] ... [body ≫ body- ⇒ _]]
    --------
-   [⊢ (for*- ([x- e-] ...) b- ... body-) ⇒ : #,Unit+]])
+   [⊢ (for*- ([x- e-] ...) b- ... body-) ⇒ #,Unit+]])
 
 (define-typed-syntax for/list
-  [(for/list ([(~optional (~literal #%brackets)) x:id e]...) body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...) ⊢ [body ≫ body- ⇒ : ty_body]]
+  [(for/list (s:x+e ...) body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ ty_body]
    --------
-   [⊢ (for/list- ([x- e-] ...) body-) ⇒ : #,(mk-List- #'(ty_body))]])
+   [⊢ (for/list- ([x- e-] ...) body-) ⇒ #,(mk-List- #'(ty_body))]])
 (define-typed-syntax for/vector
-  [(for/vector ([(~optional (~literal #%brackets)) x:id e]...) body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...) ⊢ [body ≫ body- ⇒ : ty_body]]
+  [(for/vector (s:x+e ...) body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ ty_body]
    --------
-   [⊢ (for/vector- ([x- e-] ...) body-) ⇒ : #,(mk-Vector- #'(ty_body))]])
+   [⊢ (for/vector- ([x- e-] ...) body-) ⇒ #,(mk-Vector- #'(ty_body))]])
 (define-typed-syntax for*/vector
-  [(for*/vector ([(~optional (~literal #%brackets)) x:id e]...) body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...) ⊢ [body ≫ body- ⇒ : ty_body]]
+  [(for*/vector (s:x+e ...) body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ ty_body]
    --------
-   [⊢ (for*/vector- ([x- e-] ...) body-) ⇒ : #,(mk-Vector- #'(ty_body))]])
+   [⊢ (for*/vector- ([x- e-] ...) body-) ⇒ #,(mk-Vector- #'(ty_body))]])
 (define-typed-syntax for*/list
-  [(for*/list ([(~optional (~literal #%brackets)) x:id e]...) body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...) ⊢ [body ≫ body- ⇒ : ty_body]]
+  [(for*/list (s:x+e ...) body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ ty_body]
    --------
-   [⊢ (for*/list- ([x- e-] ...) body-) ⇒ : #,(mk-List- #'(ty_body))]])
+   [⊢ (for*/list- ([x- e-] ...) body-) ⇒ #,(mk-List- #'(ty_body))]])
 (define-typed-syntax for/fold
-  [(for/fold ([(~optional (~literal #%brackets)) acc init])
-             ([(~optional (~literal #%brackets)) x:id e] ...) body) ⇐ : τ_expected ≫
-   [⊢ [init ≫ init- ⇐ : τ_expected]]
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([acc ≫ acc- : τ_expected] [x ≫ x- : ty] ...)
-    ⊢ [body ≫ body- ⇐ : τ_expected]]
+  [(for/fold (acc:x+e) (s:x+e ...) b) ⇐ τ_expected ≫
+   [⊢ acc.e ≫ init- ⇐ τ_expected]
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[acc.x ≫ acc- : τ_expected] [s.x ≫ x- : ty] ... ⊢ [b ≫ b- ⇐ τ_expected]]
    --------
-   [⊢ (for/fold- ([acc- init-]) ([x- e-] ...) body-)]]
-  [(for/fold ([(~optional (~literal #%brackets)) acc init])
-             ([(~optional (~literal #%brackets)) x:id e] ...) body) ≫
-   [⊢ [init ≫ init- ⇒ : τ_init]]
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([acc ≫ acc- : τ_init] [x ≫ x- : ty] ...)
-    ⊢ [body ≫ body- ⇐ : τ_init]]
+   [⊢ (for/fold- ([acc- init-]) ([x- e-] ...) b-)]]
+  [(for/fold (acc:x+e) (s:x+e ...) body) ≫
+   [⊢ acc.e ≫ init- ⇒ τ_init]
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[acc.x ≫ acc- : τ_init] [s.x ≫ x- : ty] ... ⊢ [body ≫ body- ⇐ τ_init]]
    --------
-   [⊢ (for/fold- ([acc- init-]) ([x- e-] ...) body-) ⇒ : τ_init]])
+   [⊢ (for/fold- ([acc- init-]) ([x- e-] ...) body-) ⇒ τ_init]])
 
 (define-typed-syntax for/hash
-  [(for/hash ([(~optional (~literal #%brackets)) x:id e]...) body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...) ⊢ [body ≫ body- ⇒ : (~× ty_k ty_v)]]
+  [(for/hash (s:x+e ...) body) ≫
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ body ≫ body- ⇒ (~× ty_k ty_v)]
    --------
    [⊢ (for/hash- ([x- e-] ...)
              (let-values- ([(t) body-])
                (values- (#%plain-app- car- t) (#%plain-app- cadr- t))))
-       ⇒ : #,(mk-Hash- #'(ty_k ty_v))]])
+       ⇒ #,(mk-Hash- #'(ty_k ty_v))]])
 
 (define-typed-syntax for/sum
-  [(for/sum ([(~optional (~literal #%brackets)) x:id e]... 
-             (~optional (~seq #:when guard) #:defaults ([guard #'(ext-stlc:#%datum . #t)])))
+  [(for/sum (s:x+e ... (~optional (~seq #:when guard)
+                         #:defaults ([guard #'(ext-stlc:#%datum . #t)])))
      body) ≫
-   [⊢ [e ≫ e- ⇒ : (~Sequence ty)] ...]
-   [() ([x ≫ x- : ty] ...)
-    ⊢ [guard ≫ guard- ⇒ : _] [body ≫ body- ⇐ : #,Int+]]
+   [⊢ s.e ≫ e- ⇒ (~Sequence ty)] ...
+   [[s.x ≫ x- : ty] ... ⊢ [guard ≫ guard- ⇒ _] [body ≫ body- ⇐ #,Int+]]
    --------
-   [⊢ (for/sum- ([x- e-] ... #:when guard-) body-) ⇒ : #,Int+]])
+   [⊢ (for/sum- ([x- e-] ... #:when guard-) body-) ⇒ #,Int+]])
 
 ; printing and displaying
 (define-typed-syntax printf
@@ -1017,22 +1023,22 @@
    [⊢ (#%plain-app- format- s- e- ...) ⇒ : #,String+]])
 
 (define-typed-syntax let ; add named let
-  [(let name:id (~datum :) ty:type ~! ([(~optional (~literal #%brackets)) x:id e] ...) b ... body) ≫
-   [⊢ [e ≫ e- ⇒ : ty_e] ...]
-   [() ([name ≫ name- : (→ ty_e ... ty.norm)] [x ≫ x- : ty_e] ...)
-    ⊢ [b ≫ b- ⇒ : _] ... [body ≫ body- ⇐ : ty.norm]]
+  [(let name:id (~datum :) ty:type ~! (:x+e ...) b ... body) ≫
+   [⊢ e ≫ e- ⇒ ty_e] ...
+   [[name ≫ name- : (→ ty_e ... ty.norm)] [x ≫ x- : ty_e] ...
+     ⊢ [b ≫ b- ⇒ _] ... [body ≫ body- ⇐ ty.norm]]
    --------
    [⊢ (letrec-values- ([(name-) (λ- (x- ...) b- ... body-)])
              (name- e- ...))
-       ⇒ : ty.norm]]
-  [(let ([(~optional (~literal #%brackets)) x:id e] ...) body ...) ≫
+       ⇒ ty.norm]]
+  [(let (:x+e ...) body ...) ≫
    --------
-   [≻ (ext-stlc:let ([x e] ...) (ext-stlc:begin body ...))]])
+   [≻ (ext-stlc:let (x+e ...) (ext-stlc:begin body ...))]])
 
 (define-typed-syntax let*
-  [(_ ([(~optional (~literal #%brackets)) x+ty ...] ...) b ...) ≫
+  [(_ (:x+e ...) b ...) ≫
    --------
-   [≻ (ext-stlc:let* ([x+ty ...] ...) b ...)]])
+   [≻ (ext-stlc:let* (x+e ...) b ...)]])
 
 (define-typed-syntax letrec
   [(_ ([(~optional (~literal #%brackets)) x+ty ...] ...) b ...) ≫
