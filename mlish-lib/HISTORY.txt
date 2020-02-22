@@ -9,5 +9,9 @@ Revision history for mlish
 0.2.2 (2020-02-18)
 - change match tuple pattern to same as match2
 
-0.3 (2020-02-10)
+0.3 (2020-02-20)
 - give brackets semantic meaning, as literal lists
+
+0.3.1 (2020-02-22)
+- Racket 7.0 unsupported
+  - due to commit 7382f24f: organize match into stx classes
